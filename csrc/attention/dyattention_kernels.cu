@@ -220,7 +220,7 @@ __device__ void dy_paged_attention_kernel(
        block_idx += NUM_WARPS) {
     if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
-      table_entry = table_entry_id++;
+      table_entry = block_table[table_entry_id++];
       entry_block_count = 1 << ((table_entry >> 28) + 1);
       entry_start_phy_id = table_entry & phy_idx_mask;
       entry_end_block_id += entry_block_count;
@@ -359,7 +359,7 @@ __device__ void dy_paged_attention_kernel(
        block_idx += NUM_WARPS) {
     if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
-      table_entry = table_entry_id++;
+      table_entry = block_table[table_entry_id++];
       entry_block_count = 1 << ((table_entry >> 28) + 1);
       entry_start_phy_id = table_entry & phy_idx_mask;
       entry_end_block_id += entry_block_count;
