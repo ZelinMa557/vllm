@@ -215,7 +215,7 @@ __device__ void dy_paged_attention_kernel(
   int entry_block_count = (table_entry >> 24);
   int entry_start_phy_id = table_entry & phy_idx_mask;
   int entry_start_block_id = 0;
-
+  printf("thread: %d num thread: %d num warps: %d\n", threadIdx.x, NUM_THREADS, NUM_WARPS);
   for (int block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
     if (block_idx >= entry_start_block_id + entry_block_count) {
