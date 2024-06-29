@@ -323,19 +323,19 @@ if __name__ == '__main__':
 
     if args.num_query_heads % args.num_kv_heads != 0:
         raise ValueError("num_query_heads must be divisible by num_kv_heads")
-    dymain(
-        num_seqs=args.batch_size,
-        seq_len=args.seq_len,
-        num_query_heads=args.num_query_heads,
-        num_kv_heads=args.num_kv_heads,
-        head_size=args.head_size,
-        block_size=args.block_size,
-        use_alibi=args.use_alibi,
-        dtype=STR_DTYPE_TO_TORCH_DTYPE[args.dtype],
-        seed=args.seed,
-        do_profile=args.profile,
-        kv_cache_dtype=args.kv_cache_dtype,
-    )
+    # dymain(
+    #     num_seqs=args.batch_size,
+    #     seq_len=args.seq_len,
+    #     num_query_heads=args.num_query_heads,
+    #     num_kv_heads=args.num_kv_heads,
+    #     head_size=args.head_size,
+    #     block_size=args.block_size,
+    #     use_alibi=args.use_alibi,
+    #     dtype=STR_DTYPE_TO_TORCH_DTYPE[args.dtype],
+    #     seed=args.seed,
+    #     do_profile=args.profile,
+    #     kv_cache_dtype=args.kv_cache_dtype,
+    # )
     main(
         version=args.version,
         num_seqs=args.batch_size,
