@@ -204,7 +204,7 @@ def dymain(
     block_tables_lst: List[List[int]] = []
     for _ in range(num_seqs):
         block_table = [
-            (8 << 24) + random.randint(0, 10)
+            (3 << 24) + random.randint(0, 10)
             for _ in range(max_num_blocks_per_seq)
         ]
         block_tables_lst.append(block_table)

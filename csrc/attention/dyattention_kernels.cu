@@ -212,17 +212,18 @@ __device__ void dy_paged_attention_kernel(
 
   int table_entry_id = 0;
   int table_entry = block_table[0];
-  int entry_block_count = (table_entry >> 24);
+  int entry_block_count = 1 << ((table_entry >> 28) + 1);
   int entry_start_phy_id = table_entry & phy_idx_mask;
   int entry_start_block_id = 0;
-  printf("thread: %d num thread: %d num warps: %d\n", threadIdx.x, NUM_THREADS, NUM_WARPS);
+  int entry_end_block_id = entry_block_count - 1;
   for (int block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
-    if (block_idx >= entry_start_block_id + entry_block_count) {
+    if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
       table_entry = table_entry_id++;
-      entry_block_count = (table_entry >> 24);
+      entry_block_count = 1 << ((table_entry >> 28) + 1);
       entry_start_phy_id = table_entry & phy_idx_mask;
+      entry_end_block_id += entry_block_count;
     }
     int phy_block_id = (block_idx - entry_start_block_id) + entry_start_phy_id;
     const int64_t physical_block_number = static_cast<int64_t>(phy_block_id);
@@ -350,17 +351,18 @@ __device__ void dy_paged_attention_kernel(
 
   table_entry_id = 0;
   table_entry = block_table[0];
-  entry_block_count = (table_entry >> 24);
+  entry_block_count = 1 << ((table_entry >> 28) + 1);
   entry_start_phy_id = table_entry & phy_idx_mask;
   entry_start_block_id = 0;
-
+  entry_end_block_id = entry_block_count - 1;
   for (int block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
-    if (block_idx >= entry_start_block_id + entry_block_count) {
+    if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
       table_entry = table_entry_id++;
-      entry_block_count = (table_entry >> 24);
+      entry_block_count = 1 << ((table_entry >> 28) + 1);
       entry_start_phy_id = table_entry & phy_idx_mask;
+      entry_end_block_id += entry_block_count;
     }
     int phy_block_id = (block_idx - entry_start_block_id) + entry_start_phy_id;
     const int64_t physical_block_number = static_cast<int64_t>(phy_block_id);
