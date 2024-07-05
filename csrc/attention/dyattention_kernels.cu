@@ -98,9 +98,9 @@ __device__ void dy_paged_attention_kernel(
                                           // head_size, block_size]
     const int num_kv_heads,               // [num_heads]
     const float scale,
-    const int* __restrict__ block_tables,  // [num_seqs, max_num_blocks_per_seq]
+    const uint32_t* __restrict__ block_tables,  // [num_seqs, max_block_table_len]
     const int* __restrict__ seq_lens,      // [num_seqs]
-    const int max_num_blocks_per_seq,
+    const int max_block_table_len,
     const float* __restrict__ alibi_slopes,  // [num_heads]
     const int q_stride, const int kv_block_stride, const int kv_head_stride,
     const float kv_scale, const int tp_rank, const int blocksparse_local_blocks,
@@ -205,14 +205,14 @@ __device__ void dy_paged_attention_kernel(
   // Each warp fetches a block of keys for each iteration.
   // Each thread group in a warp fetches a key from the block, and computes
   // dot product with the query.
-  const int* block_table = block_tables + seq_idx * max_num_blocks_per_seq;
+  const int* block_table = block_tables + seq_idx * max_block_table_len;
 
   // NOTE: block sparse support are deleted
   constexpr int phy_idx_mask = (1 << 24) - 1;
 
   int table_entry_id = 0;
-  int table_entry = block_table[0];
-  int entry_block_count = 1 << ((table_entry >> 28) + 1);
+  uint32_t table_entry = block_table[0];
+  int entry_block_count = (table_entry >> 24) + 1;
   int entry_start_phy_id = table_entry & phy_idx_mask;
   int entry_start_block_id = 0;
   int entry_end_block_id = entry_block_count - 1;
@@ -221,7 +221,7 @@ __device__ void dy_paged_attention_kernel(
     if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
       table_entry = block_table[++table_entry_id];
-      entry_block_count = 1 << ((table_entry >> 28) + 1);
+      entry_block_count = (table_entry >> 24) + 1;
       entry_start_phy_id = table_entry & phy_idx_mask;
       entry_end_block_id += entry_block_count;
     }
@@ -351,7 +351,7 @@ __device__ void dy_paged_attention_kernel(
 
   table_entry_id = 0;
   table_entry = block_table[0];
-  entry_block_count = 1 << ((table_entry >> 28) + 1);
+  entry_block_count = (table_entry >> 24) + 1;
   entry_start_phy_id = table_entry & phy_idx_mask;
   entry_start_block_id = 0;
   entry_end_block_id = entry_block_count - 1;
@@ -360,7 +360,7 @@ __device__ void dy_paged_attention_kernel(
     if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
       table_entry = block_table[++table_entry_id];
-      entry_block_count = 1 << ((table_entry >> 28) + 1);
+      entry_block_count = (table_entry >> 24) + 1;
       entry_start_phy_id = table_entry & phy_idx_mask;
       entry_end_block_id += entry_block_count;
     }
@@ -486,9 +486,9 @@ __global__ void dy_paged_attention_kernel_warp(
                                           // head_size, block_size]
     const int num_kv_heads,               // [num_heads]
     const float scale,
-    const int* __restrict__ block_tables,  // [num_seqs, max_num_blocks_per_seq]
+    const uint32_t* __restrict__ block_tables,  // [num_seqs, max_block_table_len]
     const int* __restrict__ seq_lens,      // [num_seqs]
-    const int max_num_blocks_per_seq,
+    const int max_block_table_len,
     const float* __restrict__ alibi_slopes,  // [num_heads]
     const int q_stride, const int kv_block_stride, const int kv_head_stride,
     const float kv_scale, const int tp_rank, const int blocksparse_local_blocks,
@@ -498,7 +498,7 @@ __global__ void dy_paged_attention_kernel_warp(
                             NUM_THREADS, KV_DTYPE, IS_BLOCK_SPARSE,
                             PARTITION_SIZE>(
       exp_sums, max_logits, tmp_out, q, k_cache, v_cache, num_kv_heads, scale,
-      block_tables, seq_lens, max_num_blocks_per_seq, alibi_slopes, q_stride,
+      block_tables, seq_lens, max_block_table_len, alibi_slopes, q_stride,
       kv_block_stride, kv_head_stride, kv_scale, tp_rank,
       blocksparse_local_blocks, blocksparse_vert_stride, blocksparse_block_size,
       blocksparse_head_sliding_step);
@@ -620,7 +620,7 @@ __global__ void dy_paged_attention_v2_reduce_kernel(
       <<<grid, block, shared_mem_size, stream>>>(                              \
           exp_sums_ptr, max_logits_ptr, tmp_out_ptr, query_ptr, key_cache_ptr, \
           value_cache_ptr, num_kv_heads, scale, block_tables_ptr,              \
-          seq_lens_ptr, max_num_blocks_per_seq, alibi_slopes_ptr, q_stride,    \
+          seq_lens_ptr, max_block_table_len, alibi_slopes_ptr, q_stride,    \
           kv_block_stride, kv_head_stride, kv_scale, tp_rank,                  \
           blocksparse_local_blocks, blocksparse_vert_stride,                   \
           blocksparse_block_size, blocksparse_head_sliding_step);              \
@@ -645,7 +645,7 @@ void dy_paged_attention_launcher(
   int num_seqs = query.size(0);
   int num_heads = query.size(1);
   int head_size = query.size(2);
-  int max_num_blocks_per_seq = block_tables.size(1);
+  int max_block_table_len = block_tables.size(1);
   int q_stride = query.stride(0);
   int kv_block_stride = key_cache.stride(0);
   int kv_head_stride = key_cache.stride(1);
@@ -666,7 +666,7 @@ void dy_paged_attention_launcher(
   T* query_ptr = reinterpret_cast<T*>(query.data_ptr());
   CACHE_T* key_cache_ptr = reinterpret_cast<CACHE_T*>(key_cache.data_ptr());
   CACHE_T* value_cache_ptr = reinterpret_cast<CACHE_T*>(value_cache.data_ptr());
-  int* block_tables_ptr = block_tables.data_ptr<int>();
+  uint32_t* block_tables_ptr = block_tables.data_ptr<uint32_t>();
   int* seq_lens_ptr = seq_lens.data_ptr<int>();
 
   constexpr int NUM_WARPS = NUM_THREADS / WARP_SIZE;
@@ -758,7 +758,7 @@ void dy_paged_attention(
         value_cache,       // [num_blocks, num_heads, head_size, block_size]
     int64_t num_kv_heads,  // [num_heads]
     double scale,
-    torch::Tensor& block_tables,  // [num_seqs, max_num_blocks_per_seq]
+    torch::Tensor& block_tables,  // [num_seqs, max_block_table_len]
     torch::Tensor& seq_lens,      // [num_seqs]
     int64_t block_size, int64_t max_seq_len,
     const c10::optional<torch::Tensor>& alibi_slopes,
