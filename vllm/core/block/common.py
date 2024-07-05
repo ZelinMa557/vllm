@@ -30,14 +30,13 @@ class RefCounter(RefCounterProtocol):
             to initialize the reference counter with.
     """
 
-    def __init__(self, all_block_indices: Iterable[BlockId]):
-        deduped = set(all_block_indices)
-        self._refcounts: Dict[BlockId,
-                              RefCount] = {index: 0
-                                           for index in deduped}
+    def __init__(self):
+        self._refcounts: Dict[BlockId, RefCount] = {}
 
     def incr(self, block_id: BlockId) -> RefCount:
-        assert block_id in self._refcounts
+        if block_id not in self._refcounts:
+            self._refcounts[block_id] = 1
+            return 1
         pre_incr_refcount = self._refcounts[block_id]
 
         assert pre_incr_refcount >= 0
@@ -52,13 +51,15 @@ class RefCounter(RefCounterProtocol):
 
         assert refcount > 0
         refcount -= 1
-
-        self._refcounts[block_id] = refcount
-
+        if refcount > 0:
+            self._refcounts[block_id] = refcount
+        else:
+            del self._refcounts[block_id]
         return refcount
 
     def get(self, block_id: BlockId) -> RefCount:
-        assert block_id in self._refcounts
+        if block_id not in self._refcounts:
+            return 0
         return self._refcounts[block_id]
 
     def as_readonly(self) -> "ReadOnlyRefCounter":
@@ -114,7 +115,7 @@ class CopyOnWriteTracker:
         self._refcounter = refcounter
         self._allocator = allocator
 
-    def cow_block_if_not_appendable(self, block: Block) -> Optional[BlockId]:
+    def cow_block_if_not_appendable(self, block: CompoundBlock) -> Optional[BlockId]:
         """Performs a copy-on-write operation on the given block if it is not
         appendable.
 
@@ -132,7 +133,7 @@ class CopyOnWriteTracker:
                 -write operation was performed, or the original block index if
                 no copy-on-write was necessary.
         """
-        block_id = block.block_id
+        block_id = block.start_block_id
         if block_id is None:
             return block_id
 

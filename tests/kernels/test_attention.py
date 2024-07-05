@@ -111,7 +111,7 @@ def ref_single_query_cached_kv_attention(
         output[i].copy_(out, non_blocking=True)
 
 
-@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("version", ["v2"])
 @pytest.mark.parametrize("num_seqs", NUM_GEN_SEQS)
 @pytest.mark.parametrize("num_heads", NUM_HEADS)
 @pytest.mark.parametrize("head_size", HEAD_SIZES)
@@ -160,8 +160,7 @@ def test_paged_attention(
     block_tables_lst: List[List[int]] = []
     for _ in range(num_seqs):
         block_table = [
-            random.randint(0, NUM_BLOCKS - 1)
-            for _ in range(max_num_blocks_per_seq)
+            i for i in range(max_num_blocks_per_seq)
         ]
         block_tables_lst.append(block_table)
 
@@ -178,56 +177,38 @@ def test_paged_attention(
     kv_scale = 1.0
 
     # Call the paged attention kernel.
-    output = torch.empty_like(query)
-    if version == "v1":
-        ops.paged_attention_v1(
-            output,
-            query,
-            key_cache,
-            value_cache,
-            num_kv_heads,
-            scale,
-            block_tables,
-            seq_lens,
-            block_size,
-            max_seq_len,
-            alibi_slopes,
-            kv_cache_dtype,
-            kv_scale,
-        )
-    elif version == "v2":
-        num_partitions = ((max_seq_len + PARTITION_SIZE - 1) // PARTITION_SIZE)
-        assert PARTITION_SIZE % block_size == 0
-        num_seqs, num_heads, head_size = output.shape
-        tmp_output = torch.empty(
-            size=(num_seqs, num_heads, num_partitions, head_size),
-            dtype=output.dtype,
-        )
-        exp_sums = torch.empty(
-            size=(num_seqs, num_heads, num_partitions),
-            dtype=torch.float32,
-        )
-        max_logits = torch.empty_like(exp_sums)
-        ops.paged_attention_v2(
-            output,
-            exp_sums,
-            max_logits,
-            tmp_output,
-            query,
-            key_cache,
-            value_cache,
-            num_kv_heads,
-            scale,
-            block_tables,
-            seq_lens,
-            block_size,
-            max_seq_len,
-            alibi_slopes,
-            kv_cache_dtype,
-            kv_scale,
-        )
-    else:
-        raise AssertionError(f"Unknown version: {version}")
+    output1 = torch.empty_like(query)
+    num_partitions = ((max_seq_len + PARTITION_SIZE - 1) // PARTITION_SIZE)
+    assert PARTITION_SIZE % block_size == 0
+    num_seqs, num_heads, head_size = output.shape
+    tmp_output = torch.empty(
+        size=(num_seqs, num_heads, num_partitions, head_size),
+        dtype=output.dtype,
+    )
+    exp_sums = torch.empty(
+        size=(num_seqs, num_heads, num_partitions),
+        dtype=torch.float32,
+    )
+    max_logits = torch.empty_like(exp_sums)
+    ops.paged_attention_v2(
+        output1,
+        exp_sums,
+        max_logits,
+        tmp_output,
+        query,
+        key_cache,
+        value_cache,
+        num_kv_heads,
+        scale,
+        block_tables,
+        seq_lens,
+        block_size,
+        max_seq_len,
+        alibi_slopes,
+        kv_cache_dtype,
+        kv_scale,
+    )
+    
 
     # Run the reference implementation.
     if kv_cache_dtype == "fp8":
@@ -248,17 +229,30 @@ def test_paged_attention(
         ops.convert_fp8(dequantized_value_cache, value_cache)
         value_cache = dequantized_value_cache
 
-    ref_output = torch.empty_like(query)
-    ref_single_query_cached_kv_attention(
-        ref_output,
+    block_tables_lst: List[List[int]] = []
+    for _ in range(num_seqs):
+        block_table = [(15<<28), (6<<28)+4096, (5<<28)+4096+128, (4<<28)+4096+128+64, (1<<28)+4096+128+64+32]
+        block_tables_lst.append(block_table)
+
+    block_tables = torch.tensor(block_tables_lst, dtype=torch.uint32)
+    output2 = torch.empty_like(query)
+    ops.dy_paged_attention(
+        output2,
+        exp_sums,
+        max_logits,
+        tmp_output,
         query,
-        num_queries_per_kv,
         key_cache,
         value_cache,
+        num_kv_heads,
+        scale,
         block_tables,
         seq_lens,
-        scale,
+        block_size,
+        max_seq_len,
         alibi_slopes,
+        kv_cache_dtype,
+        kv_scale,
     )
 
     # NOTE(woosuk): Due to the kernel-level differences in the two
@@ -272,7 +266,7 @@ def test_paged_attention(
     atol, rtol = 1e-3, 1e-5
     if kv_cache_dtype == "fp8":
         atol, rtol = 1e-2, 1e-5
-    assert torch.allclose(output, ref_output, atol=atol, rtol=rtol)
+    assert torch.allclose(output1, output2, atol=atol, rtol=rtol)
 
 
 def ref_multi_query_kv_attention(

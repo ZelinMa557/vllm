@@ -6,7 +6,7 @@ from vllm.utils import Device
 BlockId = int
 
 
-class Block(ABC):
+class CompoundBlock(ABC):
 
     @abstractmethod
     def append_token_ids(self, token_ids: List[int]) -> None:
@@ -14,14 +14,19 @@ class Block(ABC):
 
     @property
     @abstractmethod
-    def block_id(self) -> Optional[int]:
+    def start_block_id(self) -> Optional[int]:
+        pass
+    
+    @property
+    @abstractmethod
+    def num_sub_blocks(self) -> Optional[int]:
         pass
 
-    @block_id.setter
+    @start_block_id.setter
     @abstractmethod
-    def block_id(self, value: Optional[int]) -> None:
+    def start_block_id(self, value: Optional[int]) -> None:
         """NOTE: Do not use this API outside Block."""
-        self._block_id = value
+        self._start_block_id = value
 
     @property
     @abstractmethod
@@ -40,7 +45,7 @@ class Block(ABC):
 
     @property
     @abstractmethod
-    def prev_block(self) -> Optional["Block"]:
+    def prev_block(self) -> Optional["CompoundBlock"]:
         pass
 
     @property
@@ -69,12 +74,13 @@ class Block(ABC):
         @abstractmethod
         def __call__(
             self,
-            prev_block: Optional["Block"],
+            prev_block: Optional["CompoundBlock"],
             token_ids: List[int],
-            block_size: int,
+            sub_block_size: int,
             allocator: "BlockAllocator",
-            block_id: Optional[int] = None,
-        ) -> "Block":
+            num_sub_blocks: Optional[int] = None
+            start_sub_block_id: Optional[int] = None,
+        ) -> "CompoundBlock":
             pass
 
     @property
@@ -92,20 +98,20 @@ class Block(ABC):
 class BlockAllocator(ABC):
 
     @abstractmethod
-    def allocate_mutable(self, prev_block: Optional[Block]) -> Block:
+    def allocate_mutable(self, prev_block: Optional[CompoundBlock], size: int) -> CompoundBlock:
         pass
 
     @abstractmethod
-    def allocate_immutable(self, prev_block: Optional[Block],
-                           token_ids: List[int]) -> Block:
+    def allocate_immutable(self, prev_block: Optional[CompoundBlock],
+                           token_ids: List[int], size: int) -> CompoundBlock:
         pass
 
     @abstractmethod
-    def free(self, block: Block) -> None:
+    def free(self, block: CompoundBlock) -> None:
         pass
 
     @abstractmethod
-    def fork(self, last_block: Block) -> List[Block]:
+    def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
         pass
 
     @abstractmethod
@@ -121,11 +127,11 @@ class BlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def swap_out(self, blocks: List[Block]) -> None:
+    def swap_out(self, blocks: List[CompoundBlock]) -> None:
         pass
 
     @abstractmethod
-    def swap_in(self, blocks: List[Block]) -> None:
+    def swap_in(self, blocks: List[CompoundBlock]) -> None:
         pass
 
     @property
@@ -152,18 +158,18 @@ class BlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def cow_block_if_not_appendable(self, block: Block) -> Optional["BlockId"]:
+    def cow_block_if_not_appendable(self, block: CompoundBlock) -> Optional["BlockId"]:
         """NOTE: This should not be used besides Block"""
         pass
 
     @abstractmethod
-    def promote_to_immutable_block(self, block: Block) -> BlockId:
+    def promote_to_immutable_block(self, block: CompoundBlock) -> CompoundBlockId:
         """NOTE: This should not be used besides Block"""
         pass
 
     @abstractmethod
     def get_num_blocks_touched(self,
-                               blocks: List[Block],
+                               blocks: List[CompoundBlock],
                                num_lookahead_slots: int = 0) -> int:
         pass
 
@@ -174,13 +180,13 @@ class BlockAllocator(ABC):
 class DeviceAwareBlockAllocator(ABC):
 
     @abstractmethod
-    def allocate_mutable(self, prev_block: Optional[Block],
-                         device: Device) -> Block:
+    def allocate_mutable(self, prev_block: Optional[CompoundBlock],
+                         device: Device, size: int) -> CompoundBlock:
         pass
 
     @abstractmethod
-    def allocate_immutable(self, prev_block: Optional[Block],
-                           token_ids: List[int], device: Device) -> Block:
+    def allocate_immutable(self, prev_block: Optional[CompoundBlock],
+                           token_ids: List[int], device: Device, size: int) -> CompoundBlock:
         pass
 
     @abstractmethod
@@ -192,11 +198,11 @@ class DeviceAwareBlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def free(self, block: Block) -> None:
+    def free(self, block: CompoundBlock) -> None:
         pass
 
     @abstractmethod
-    def fork(self, last_block: Block) -> List[Block]:
+    def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
         pass
 
     @property
@@ -224,13 +230,13 @@ class DeviceAwareBlockAllocator(ABC):
 
     @abstractmethod
     def get_num_blocks_touched(self,
-                               blocks: List[Block],
+                               blocks: List[CompoundBlock],
                                device: Device,
                                num_lookahead_slots: int = 0) -> int:
         pass
 
     @abstractmethod
-    def swap(self, blocks: List[Block], source_device: Device,
+    def swap(self, blocks: List[CompoundBlock], source_device: Device,
              dest_device: Device) -> Dict[int, int]:
         pass
 
@@ -239,7 +245,7 @@ class DeviceAwareBlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def allocate_or_get_null_block(self) -> Block:
+    def allocate_or_get_null_block(self) -> CompoundBlock:
         """
         Null blocks are used as a placeholders for KV cache blocks that have
         been dropped due to sliding window.

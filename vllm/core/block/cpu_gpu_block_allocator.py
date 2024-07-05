@@ -1,8 +1,8 @@
 from typing import Dict, FrozenSet, List, Optional, Tuple
 
-from vllm.core.block.interfaces import (Block, BlockAllocator, BlockId,
+from vllm.core.block.interfaces import (CompoundBlock, BlockAllocator, BlockId,
                                         DeviceAwareBlockAllocator)
-from vllm.core.block.naive_block import NaiveBlock, NaiveBlockAllocator
+from vllm.core.block.buddy_allocator import BuddyAllocator, CompoundBlockImpl
 from vllm.core.block.prefix_caching_block import PrefixCachingBlockAllocator
 from vllm.utils import Device
 
@@ -55,35 +55,20 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         block_ids = list(range(num_gpu_blocks + num_cpu_blocks))
         gpu_block_ids = block_ids[:num_gpu_blocks]
         cpu_block_ids = block_ids[num_gpu_blocks:]
+        assert allocator_type == "naive"
+        gpu_allocator: BlockAllocator = BuddyAllocator(
+            create_block=CompoundBlock,  # type: ignore
+            num_blocks=num_gpu_blocks,
+            block_size=block_size,
+            block_ids=gpu_block_ids,
+        )
 
-        if allocator_type == "naive":
-            gpu_allocator: BlockAllocator = NaiveBlockAllocator(
-                create_block=NaiveBlock,  # type: ignore
-                num_blocks=num_gpu_blocks,
-                block_size=block_size,
-                block_ids=gpu_block_ids,
-            )
-
-            cpu_allocator: BlockAllocator = NaiveBlockAllocator(
-                create_block=NaiveBlock,  # type: ignore
-                num_blocks=num_cpu_blocks,
-                block_size=block_size,
-                block_ids=cpu_block_ids,
-            )
-        elif allocator_type == "prefix_caching":
-            gpu_allocator = PrefixCachingBlockAllocator(
-                num_blocks=num_gpu_blocks,
-                block_size=block_size,
-                block_ids=gpu_block_ids,
-            )
-
-            cpu_allocator = PrefixCachingBlockAllocator(
-                num_blocks=num_cpu_blocks,
-                block_size=block_size,
-                block_ids=cpu_block_ids,
-            )
-        else:
-            raise ValueError(f"Unknown allocator type {allocator_type=}")
+        cpu_allocator: BlockAllocator = BuddyAllocator(
+            create_block=CompoundBlock,  # type: ignore
+            num_blocks=num_cpu_blocks,
+            block_size=block_size,
+            block_ids=cpu_block_ids,
+        )
 
         return CpuGpuBlockAllocator(
             cpu_block_allocator=cpu_allocator,
@@ -110,28 +95,29 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
             for block_id in allocator.all_block_ids:
                 self._block_ids_to_allocator[block_id] = allocator
 
-    def allocate_or_get_null_block(self) -> Block:
+    def allocate_or_get_null_block(self) -> CompoundBlock:
         if self._null_block is None:
             self._null_block = NullBlock(
                 self.allocate_mutable(None, Device.GPU))
         return self._null_block
 
-    def allocate_mutable(self, prev_block: Optional[Block],
-                         device: Device) -> Block:
+    def allocate_mutable(self, prev_block: Optional[CompoundBlock],
+                         device: Device, size: int) -> CompoundBlock:
         """Allocates a new mutable block on the specified device.
 
         Args:
             prev_block (Optional[Block]): The previous block to in the sequence.
                 Used for prefix hashing.
             device (Device): The device on which to allocate the new block.
+            size (int): The size to allocate
 
         Returns:
             Block: The newly allocated mutable block.
         """
-        return self._allocators[device].allocate_mutable(prev_block)
+        return self._allocators[device].allocate_mutable(prev_block, size)
 
-    def allocate_immutable(self, prev_block: Optional[Block],
-                           token_ids: List[int], device: Device) -> Block:
+    def allocate_immutable(self, prev_block: Optional[CompoundBlock],
+                           token_ids: List[int], device: Device, size: int) -> CompoundBlock:
         """Allocates a new immutable block with the provided token IDs on the
         specified device.
 
@@ -147,9 +133,9 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
                 token IDs.
         """
         return self._allocators[device].allocate_immutable(
-            prev_block, token_ids)
+            prev_block, token_ids, size)
 
-    def free(self, block: Block) -> None:
+    def free(self, block: CompoundBlock) -> None:
         """Frees the memory occupied by the given block.
 
         Args:
@@ -163,7 +149,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         allocator = self._block_ids_to_allocator[block_id]
         return allocator.free(block)
 
-    def fork(self, last_block: Block) -> List[Block]:
+    def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
         """Creates a new sequence of blocks that shares the same underlying
             memory as the original sequence.
 
@@ -210,7 +196,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         """
         return self._allocators[device].get_physical_block_id(absolute_id)
 
-    def swap(self, blocks: List[Block], source_device: Device,
+    def swap(self, blocks: List[CompoundBlock], source_device: Device,
              dest_device: Device) -> Dict[int, int]:
         """Execute the swap for the given blocks from source_device
         on to dest_device, save the current swap mapping and append 
@@ -239,7 +225,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         return current_swap_mapping
 
     def get_num_blocks_touched(self,
-                               blocks: List[Block],
+                               blocks: List[CompoundBlock],
                                device: Device,
                                num_lookahead_slots: int = 0) -> int:
         """Returns the number of blocks that will be touched by
@@ -294,10 +280,10 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
     def all_block_ids(self) -> FrozenSet[int]:
         return frozenset(self._block_ids_to_allocator.keys())
 
-    def promote_to_immutable_block(self, block: Block) -> BlockId:
+    def promote_to_immutable_block(self, block: CompoundBlock) -> BlockId:
         raise NotImplementedError
 
-    def cow_block_if_not_appendable(self, block: Block) -> Optional[BlockId]:
+    def cow_block_if_not_appendable(self, block: CompoundBlock) -> Optional[BlockId]:
         raise NotImplementedError
 
     def get_and_reset_swaps(self) -> List[Tuple[int, int]]:
@@ -313,7 +299,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         return list(mapping.items())
 
 
-class NullBlock(Block):
+class NullBlock(CompoundBlock):
     """
     Null blocks are used as a placeholders for KV cache blocks that have
     been dropped due to sliding window.
@@ -322,7 +308,7 @@ class NullBlock(Block):
     via isinstance().
     """
 
-    def __init__(self, proxy: Block):
+    def __init__(self, proxy: CompoundBlock):
         super().__init__()
         self._proxy = proxy
 
