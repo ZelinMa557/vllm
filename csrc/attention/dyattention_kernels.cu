@@ -205,18 +205,18 @@ __device__ void dy_paged_attention_kernel(
   // Each warp fetches a block of keys for each iteration.
   // Each thread group in a warp fetches a key from the block, and computes
   // dot product with the query.
-  const int* block_table = block_tables + seq_idx * max_block_table_len;
+  const uint32_t* block_table = block_tables + seq_idx * max_block_table_len;
 
   // NOTE: block sparse support are deleted
   constexpr int phy_idx_mask = (1 << 24) - 1;
 
-  int table_entry_id = 0;
+  uint32_t table_entry_id = 0;
   uint32_t table_entry = block_table[0];
-  int entry_block_count = (table_entry >> 24) + 1;
-  int entry_start_phy_id = table_entry & phy_idx_mask;
-  int entry_start_block_id = 0;
-  int entry_end_block_id = entry_block_count - 1;
-  for (int block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
+  uint32_t entry_block_count = (table_entry >> 24) + 1;
+  uint32_t entry_start_phy_id = table_entry & phy_idx_mask;
+  uint32_t entry_start_block_id = 0;
+  uint32_t entry_end_block_id = entry_block_count - 1;
+  for (uint32_t block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
     if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
@@ -355,7 +355,7 @@ __device__ void dy_paged_attention_kernel(
   entry_start_phy_id = table_entry & phy_idx_mask;
   entry_start_block_id = 0;
   entry_end_block_id = entry_block_count - 1;
-  for (int block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
+  for (uint32_t block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
     if (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
