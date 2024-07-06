@@ -143,6 +143,7 @@ __device__ void dy_paged_attention_kernel(
   const int end_iter_block_idx =
       start_iter_block_idx +
       ((end_block_idx - start_iter_block_idx) / NUM_WARPS) * NUM_WARPS;
+  printf("thread: %d warp: %d start: %d %d end: %d %d\n", thread_idx, warp_idx, start_block_idx, start_iter_block_idx, end_block_idx, end_iter_block_idx);
   // [start_token_idx, end_token_idx) is the range of tokens to process.
   const int start_token_idx = start_block_idx * BLOCK_SIZE;
   const int end_token_idx =
