@@ -9,7 +9,20 @@ from xformers.ops.fmha.attn_bias import BlockDiagonalCausalMask
 from vllm import _custom_ops as ops
 from vllm.utils import get_max_shared_memory_bytes, is_hip
 
-from .allclose_default import get_default_atol, get_default_rtol
+default_atol = {torch.float16: 1e-3, torch.bfloat16: 1e-3, torch.float: 1e-5}
+default_rtol = {
+    torch.float16: 1e-3,
+    torch.bfloat16: 1.6e-2,
+    torch.float: 1.3e-6
+}
+
+
+def get_default_atol(output) -> float:
+    return default_atol[output.dtype]
+
+
+def get_default_rtol(output) -> float:
+    return default_rtol[output.dtype]
 
 FLOAT32_BYTES = torch.finfo(torch.float).bits // 8
 # This will change depending on the compute capability.
