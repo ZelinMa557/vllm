@@ -244,7 +244,7 @@ def test_paged_attention(
 
     block_tables_lst: List[List[int]] = []
     for _ in range(num_seqs):
-        block_table = [4095<<24, (127<<24)+4096, (63<<24)+4096+128, (31<<24)+4096+128+64, 4095]
+        block_table = [255<<24, (7<<24)+4096, (3<<24)+4096+128, (1<<24)+4096+128+64, 4095]
         block_tables_lst.append(block_table)
 
     block_tables = torch.tensor(block_tables_lst, dtype=torch.uint32)
