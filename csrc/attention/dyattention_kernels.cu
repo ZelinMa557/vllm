@@ -218,7 +218,7 @@ __device__ void dy_paged_attention_kernel(
   uint32_t entry_end_block_id = entry_block_count - 1;
   for (uint32_t block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
-    if (block_idx > entry_end_block_id) {
+    while (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
       table_entry = block_table[++table_entry_id];
       entry_block_count = (table_entry >> 24) + 1;
@@ -357,7 +357,7 @@ __device__ void dy_paged_attention_kernel(
   entry_end_block_id = entry_block_count - 1;
   for (uint32_t block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
        block_idx += NUM_WARPS) {
-    if (block_idx > entry_end_block_id) {
+    while (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
       table_entry = block_table[++table_entry_id];
       entry_block_count = (table_entry >> 24) + 1;
