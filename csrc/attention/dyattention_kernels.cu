@@ -143,7 +143,6 @@ __device__ void dy_paged_attention_kernel(
   const int end_iter_block_idx =
       start_iter_block_idx +
       ((end_block_idx - start_iter_block_idx) / NUM_WARPS) * NUM_WARPS;
-  printf("thread: %d warp: %d start: %d %d end: %d %d\n", thread_idx, warp_idx, start_block_idx, start_iter_block_idx, end_block_idx, end_iter_block_idx);
   // [start_token_idx, end_token_idx) is the range of tokens to process.
   const int start_token_idx = start_block_idx * BLOCK_SIZE;
   const int end_token_idx =
@@ -227,6 +226,7 @@ __device__ void dy_paged_attention_kernel(
       entry_end_block_id += entry_block_count;
     }
     int phy_block_id = (block_idx - entry_start_block_id) + entry_start_phy_id;
+    printf("MXKDEBUG A logical block id = %d physical block id = %d\n", block_idx, phy_block_id);
     const int64_t physical_block_number = static_cast<int64_t>(phy_block_id);
     // Load a key to registers.
     // Each thread in a thread group has a different part of the key.
