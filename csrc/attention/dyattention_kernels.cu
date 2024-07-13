@@ -226,7 +226,6 @@ __device__ void dy_paged_attention_kernel(
       entry_end_block_id += entry_block_count;
     }
     int phy_block_id = (block_idx - entry_start_block_id) + entry_start_phy_id;
-    printf("MXKDEBUG A logical block id = %d physical block id = %d\n", block_idx, phy_block_id);
     const int64_t physical_block_number = static_cast<int64_t>(phy_block_id);
     // Load a key to registers.
     // Each thread in a thread group has a different part of the key.

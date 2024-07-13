@@ -33,22 +33,20 @@ MAX_SEQ_LEN = get_max_shared_memory_bytes() // FLOAT32_BYTES - 512
 NUM_BLOCKS = 4321  # Arbitrary values for testing
 PARTITION_SIZE = 512
 # flshattF and tritonflashattF supported: {torch.float16, torch.bfloat16}
-DTYPES = [torch.half] #, torch.bfloat16]
+DTYPES = [torch.half, torch.bfloat16]
 NUM_GEN_SEQS = [7]  # Arbitrary values for testing
 NUM_PREFILL_SEQS = [3]  # Arbitrary values for testing
 NUM_HEADS = [(40, 40), (64, 8)]  # Arbitrary values for testing
 
 # FlashAttention forward only supports head dimension at most 128
 # https://github.com/ROCmSoftwarePlatform/flash-attention/blob/3d2b6f5d037782cc2c906909a46fb7e2e1b48b25/csrc/flash_attn_rocm/flash_api.cpp#L62
-HEAD_SIZES = [64] #, 80, 96, 112, 128]
+HEAD_SIZES = [64, 80, 96, 112, 128]
 
 BLOCK_SIZES = [16] #, 32]
 USE_ALIBI = [False] #, True]
-KV_CACHE_DTYPE = ["auto"] #, "fp8"]
+KV_CACHE_DTYPE = ["auto" "fp8"]
 SEEDS = [0]
 CUDA_DEVICES = ["cuda:0"]
-#     f"cuda:{i}" for i in range(1 if torch.cuda.device_count() == 1 else 2)
-# ]
 
 
 def ref_masked_attention(
@@ -64,63 +62,6 @@ def ref_masked_attention(
     attn_weights = torch.softmax(attn_weights, dim=-1).to(value.dtype)
     out = torch.einsum("hqk,khd->qhd", attn_weights, value)
     return out
-
-
-def ref_single_query_cached_kv_attention(
-    output: torch.Tensor,
-    query: torch.Tensor,
-    num_queries_per_kv: int,
-    key_cache: torch.Tensor,
-    value_cache: torch.Tensor,
-    block_tables: torch.Tensor,
-    seq_lens: torch.Tensor,
-    scale: float,
-    alibi_slopes: Optional[torch.Tensor],
-) -> None:
-    num_query_heads = query.shape[1]
-    num_kv_heads = value_cache.shape[1]
-    head_size = value_cache.shape[2]
-    block_size = value_cache.shape[3]
-    num_seqs = query.shape[0]
-
-    block_tables_lst = block_tables.cpu().tolist()
-    seq_lens_lst = seq_lens.cpu().tolist()
-    for i in range(num_seqs):
-        q = query[i].unsqueeze(0)
-        block_table = block_tables_lst[i]
-        seq_len = int(seq_lens_lst[i])
-
-        keys_lst: List[torch.Tensor] = []
-        values_lst: List[torch.Tensor] = []
-        for j in range(seq_len):
-            block_number = int(block_table[j // block_size])
-            block_offset = j % block_size
-
-            k = key_cache[block_number, :, :, block_offset, :]
-            k = k.reshape(num_kv_heads, head_size)
-            keys_lst.append(k)
-
-            v = value_cache[block_number, :, :, block_offset]
-            values_lst.append(v)
-        keys = torch.stack(keys_lst, dim=0)
-        values = torch.stack(values_lst, dim=0)
-        if num_queries_per_kv > 1:
-            # Handle MQA and GQA
-            keys = torch.repeat_interleave(keys, num_queries_per_kv, dim=1)
-            values = torch.repeat_interleave(values, num_queries_per_kv, dim=1)
-
-        alibi_bias = None
-        if alibi_slopes is not None:
-            # Create the ALiBi bias used in the paged attention kernel.
-            position_ids = torch.arange(seq_len).int()
-            alibi_bias = (position_ids - seq_len + 1).float()
-            alibi_bias = alibi_slopes.view(-1, 1, 1) * alibi_bias.view(
-                1, 1, -1)
-
-        out = ref_masked_attention(q, keys, values, scale, alibi_bias)
-        out = out.view(num_query_heads, head_size)
-        output[i].copy_(out, non_blocking=True)
-
 
 @pytest.mark.parametrize("version", ["v2"])
 @pytest.mark.parametrize("num_seqs", NUM_GEN_SEQS)
@@ -240,10 +181,27 @@ def test_paged_attention(
         ops.convert_fp8(dequantized_value_cache, value_cache)
         value_cache = dequantized_value_cache
 
+    origin_block_table_lst = block_tables_lst
     block_tables_lst: List[List[int]] = []
     for _ in range(num_seqs):
-        block_table = [255<<24, (7<<24)+4096, (3<<24)+4096+128, (1<<24)+4096+128+64, 4095]
+        block_table = [(255<<24) + 256 * i for i in range(max_num_blocks_per_seq//256)]
+        if (max_num_blocks_per_seq % 256) != 0:
+            re = max_num_blocks_per_seq % 256
+            block_table.append(((re-1)<<24)+max_num_blocks_per_seq-re)
         block_tables_lst.append(block_table)
+    
+    # check if the block tables are consistant
+    for i in range(max_num_blocks_per_seq):
+        origin_phy_block_id = origin_block_table_lst[0][i]
+        start_logic_id = 0
+        for entry in block_tables_lst[0]:
+            start_phy_id = (entry & ((1<<24)-1))
+            entry_size = (entry >> 24) + 1
+            if (start_logic_id + entry_size) > i:
+                phy_block_id = (i - start_logic_id) + start_phy_id
+                break
+            start_logic_id += entry_size
+        assert origin_phy_block_id == phy_block_id
 
     block_tables = torch.tensor(block_tables_lst, dtype=torch.uint32)
     output2 = torch.empty_like(query)

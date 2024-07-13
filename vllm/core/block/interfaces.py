@@ -78,7 +78,7 @@ class CompoundBlock(ABC):
             token_ids: List[int],
             sub_block_size: int,
             allocator: "BlockAllocator",
-            num_sub_blocks: Optional[int] = None
+            num_sub_blocks: Optional[int] = None,
             start_sub_block_id: Optional[int] = None,
         ) -> "CompoundBlock":
             pass

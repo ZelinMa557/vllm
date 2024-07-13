@@ -2,7 +2,7 @@ from typing import FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from vllm.core.block.common import (CopyOnWriteTracker, RefCounter,
                                     get_all_blocks_recursively)
-from vllm.core.block.interfaces import Block, BlockAllocator, BlockId, Device
+from vllm.core.block.interfaces import CompoundBlock, BlockAllocator, BlockId, Device
 from vllm.utils import cdiv
 from math import log, floor
 Refcount = int
@@ -27,7 +27,7 @@ class BuddyAllocator(BlockAllocator):
 
     def __init__(
         self,
-        create_block: Block.Factory,
+        create_block: CompoundBlock.Factory,
         num_blocks: int,
         first_block_id: int
     ):
@@ -40,7 +40,7 @@ class BuddyAllocator(BlockAllocator):
         self._offset = first_block_id
         self._total_blocks = remain_blocks
         self._order_size_mp = [pow(2, i+1) for i in range(16)]
-        self._size_order_mp = {pow(2, i+1), i for i in range(16)}
+        self._size_order_mp = {(pow(2, i+1), i) for i in range(16)}
         while remain_blocks > 0:
             order = min(floor(log(remain_blocks, 2)), 16) - 1
             free_list = self._free_lists[order]
@@ -55,10 +55,10 @@ class BuddyAllocator(BlockAllocator):
         )
 
     def allocate_immutable(self,
-                           prev_block: Optional[Block],
+                           prev_block: Optional[CompoundBlock],
                            token_ids: List[int],
-                           size: int
-                           device: Optional[Device] = None) -> CompoundBlock:
+                           size: int,
+                           device: Optional[Device] = None) -> "CompoundBlock":
         """Allocates a new immutable block with the given token IDs, linked to
         the previous block.
 
@@ -77,9 +77,9 @@ class BuddyAllocator(BlockAllocator):
         return block
 
     def allocate_mutable(self,
-                         prev_block: Optional[Block],
+                         prev_block: Optional[CompoundBlock],
                          size: int,
-                         device: Optional[Device] = None) -> Block:
+                         device: Optional[Device] = None) -> CompoundBlock:
         """Allocates a new mutable block, linked to the previous block.
 
         Args:
@@ -121,7 +121,7 @@ class BuddyAllocator(BlockAllocator):
             block_id = min(block_id, buddy_id)
         block.start_block_id = None
 
-    def fork(self, last_block: Block) -> List[Block]:
+    def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
         """Creates a new sequence of blocks that shares the same underlying
         memory as the original sequence.
 
@@ -134,7 +134,7 @@ class BuddyAllocator(BlockAllocator):
         """
         source_blocks = get_all_blocks_recursively(last_block)
 
-        forked_blocks: List[Block] = []
+        forked_blocks: List[CompoundBlock] = []
         prev_block = None
         for block in source_blocks:
 
@@ -264,11 +264,11 @@ class BuddyAllocator(BlockAllocator):
         """
         return []
 
-    def promote_to_immutable_block(self, block: Block) -> BlockId:
+    def promote_to_immutable_block(self, block: CompoundBlock) -> BlockId:
         raise NotImplementedError
 
     def get_num_blocks_touched(self,
-                               blocks: List[Block],
+                               blocks: List[CompoundBlock],
                                num_lookahead_slots: int = 0) -> int:
         """Determine the number of blocks that will be touched by
         swapping in/out the given blocks from certain sequence
@@ -303,11 +303,11 @@ class BuddyAllocator(BlockAllocator):
         num_touched_blocks = new_block_count + len(old_block_set)
         return num_touched_blocks
 
-    def swap_out(self, blocks: List[Block]) -> None:
+    def swap_out(self, blocks: List[CompoundBlock]) -> None:
         for block in blocks:
             self.free(block)
 
-    def swap_in(self, blocks: List[Block]) -> None:
+    def swap_in(self, blocks: List[CompoundBlock]) -> None:
         for block in blocks:
             if block.is_full:
                 alloc = self.allocate_immutable(block.prev_block,
@@ -341,13 +341,13 @@ class CompoundBlockImpl(CompoundBlock):
     """
 
     def __init__(self,
-                 prev_block: Optional[Block],
+                 prev_block: Optional[CompoundBlock],
                  token_ids: List[int],
                  sub_block_size: int,
                  allocator: BlockAllocator,
-                 num_sub_blocks: Optional[int] = None
+                 num_sub_blocks: Optional[int] = None,
                  start_sub_block_id: Optional[int] = None,
-                 _cow_target: Optional[Block] = None):
+                 _cow_target: Optional[CompoundBlock] = None):
         self._token_ids: List[int] = []
         self._sub_block_size = sub_block_size
         self._prev_block = prev_block

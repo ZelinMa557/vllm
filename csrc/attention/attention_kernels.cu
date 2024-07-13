@@ -393,7 +393,6 @@ __device__ void paged_attention_kernel(
     }
     const int64_t physical_block_number =
         static_cast<int64_t>(block_table[block_idx]);
-    printf("MXKDEBUG B logical block id = %d physical block id = %d\n", block_idx, block_table[block_idx]);
     const int physical_block_offset = (lane % NUM_V_VECS_PER_ROW) * V_VEC_SIZE;
     const int token_idx = block_idx * BLOCK_SIZE + physical_block_offset;
     L_vec logits_vec;
