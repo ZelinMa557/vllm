@@ -191,10 +191,10 @@ def test_paged_attention(
     output1 = torch.empty_like(query)
     num_partitions = ((max_seq_len + PARTITION_SIZE - 1) // PARTITION_SIZE)
     assert PARTITION_SIZE % block_size == 0
-    num_seqs, num_heads, head_size = output.shape
+    num_seqs, num_heads, head_size = output1.shape
     tmp_output = torch.empty(
         size=(num_seqs, num_heads, num_partitions, head_size),
-        dtype=output.dtype,
+        dtype=output1.dtype,
     )
     exp_sums = torch.empty(
         size=(num_seqs, num_heads, num_partitions),
@@ -269,8 +269,8 @@ def test_paged_attention(
     # NOTE(woosuk): Due to the kernel-level differences in the two
     # implementations, there is a small numerical difference in the two
     # outputs. Thus, we use a relaxed tolerance for the test.
-    atol = get_default_atol(output) if is_hip() else 1e-3
-    rtol = get_default_rtol(output) if is_hip() else 1e-5
+    atol = get_default_atol(output1) if is_hip() else 1e-3
+    rtol = get_default_rtol(output1) if is_hip() else 1e-5
 
     # NOTE(zhaoyang): FP8 KV Cache will introduce quantization error,
     # so we use a relaxed tolerance for the test.
