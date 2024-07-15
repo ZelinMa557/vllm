@@ -7,7 +7,7 @@ from vllm.utils import cdiv
 from math import log, floor
 Refcount = int
 
-
+MAX_ORDER = 8
 class BuddyAllocator(BlockAllocator):
     """A simple block allocator that manages blocks of memory without prefix
     caching.
@@ -33,16 +33,16 @@ class BuddyAllocator(BlockAllocator):
     ):
         if block_ids is None:
             block_ids = range(num_blocks)
-        self._free_lists : List[List[int]] = [[] for _ in range(16)]
+        self._free_lists : List[List[int]] = [[] for _ in range(MAX_ORDER)]
         #TODO rewrite RefCounter and CopyOnWriteTracker
         remain_blocks = len(block_ids)
         first_block_id = block_ids[0]
         self._offset = first_block_id
         self._total_blocks = remain_blocks
-        self._order_size_mp = [pow(2, i+1) for i in range(16)]
-        self._size_order_mp = {(pow(2, i+1), i) for i in range(16)}
+        self._order_size_mp = [pow(2, i+1) for i in range(MAX_ORDER)]
+        self._size_order_mp = {(pow(2, i+1), i) for i in range(MAX_ORDER)}
         while remain_blocks > 0:
-            order = min(floor(log(remain_blocks, 2)), 16) - 1
+            order = min(floor(log(remain_blocks, 2)), MAX_ORDER) - 1
             free_list = self._free_lists[order]
             free_list.append(first_block_id)
             size = self._order_size_mp[order]
@@ -106,9 +106,9 @@ class BuddyAllocator(BlockAllocator):
         if self._refcounter.decr(block_id) > 0:
             return
         order = self._size_order_mp[block.num_blocks]
-        while order < 16:
+        while order < MAX_ORDER:
             free_list = self._free_lists[order]
-            if order == 15:
+            if order == MAX_ORDER-1:
                 free_list.append(block_id)
                 break
             buddy_id = self._buddy_block_id(block_id, order)
@@ -172,7 +172,7 @@ class BuddyAllocator(BlockAllocator):
         non_empty_order = order+1
         while len(self._free_lists[non_empty_order]) == 0:
             non_empty_order += 1
-            if non_empty_order == 16:
+            if non_empty_order == MAX_ORDER:
                 raise BlockAllocator.NoFreeBlocksError()
 
         while non_empty_order > order:

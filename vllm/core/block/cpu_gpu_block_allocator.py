@@ -88,7 +88,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         }
 
         self._swap_mapping: Dict[int, int] = {}
-        self._null_block: Optional[Block] = None
+        self._null_block: Optional[CompoundBlock] = None
 
         self._block_ids_to_allocator: Dict[int, BlockAllocator] = {}
         for _, allocator in self._allocators.items():

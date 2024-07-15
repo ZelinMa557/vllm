@@ -329,10 +329,20 @@ def update_environment_variables(envs: Dict[str, str]):
                 "from '%s' to '%s'", k, os.environ[k], v)
         os.environ[k] = v
 
-
 def chunk_list(lst: List[T], chunk_size: int) -> List[List[T]]:
-    """Yield successive chunk_size chunks from lst."""
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+    """Yield successive chunks from lst where each chunk size is a power of two times chunk_size."""
+    result = []
+    current_index: int = 0
+    chunk_length: int = chunk_size * 256
+    while current_index < len(lst):
+        # Determine the size of the next chunk
+        while chunk_length > len(lst) - current_index:
+            chunk_length = chunk_length // 2
+        
+        # Append the chunk to the result list
+        result.append(lst[current_index:current_index + chunk_length])
+        current_index += chunk_length
+    return result
 
 
 def cdiv(a: int, b: int) -> int:

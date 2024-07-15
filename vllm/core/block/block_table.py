@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from vllm.core.block.interfaces import Block, DeviceAwareBlockAllocator
+from vllm.core.block.interfaces import CompoundBlock, DeviceAwareBlockAllocator
 from vllm.utils import Device, cdiv, chunk_list
 
 
@@ -40,14 +40,14 @@ class BlockTable:
         self,
         block_size: int,
         block_allocator: DeviceAwareBlockAllocator,
-        _blocks: Optional[List[Block]] = None,
+        _blocks: Optional[List[CompoundBlock]] = None,
         max_block_sliding_window: Optional[int] = None,
     ):
         self._block_size = block_size
         self._allocator = block_allocator
         if _blocks is None:
             _blocks = []
-        self._blocks: List[Block] = _blocks
+        self._blocks: List[CompoundBlock] = _blocks
 
         self._max_block_sliding_window = max_block_sliding_window
         # Use helper method instead of directly calculating, as blocks
@@ -93,6 +93,12 @@ class BlockTable:
                                                            device=device)
         self._num_full_slots = len(token_ids)
 
+    def _find_first_not_full_block(self):
+        for i in range(len(self._blocks), -1, -1, -1):
+            if self._blocks[i].is_full:
+                return i+1
+        return len(self._blocks)
+
     def append_token_ids(self,
                          token_ids: List[int],
                          num_lookahead_slots: int = 0,
@@ -124,6 +130,8 @@ class BlockTable:
 
         # Drop blocks that are no longer needed due to sliding window
         if self._max_block_sliding_window is not None:
+            # Currently Do not support sliding window
+            assert False, "Currently Do not support sliding window"
             null_block = self._allocator.allocate_or_get_null_block()
             assert num_computed_slots is not None
             end_block_idx = (num_computed_slots //
@@ -136,46 +144,32 @@ class BlockTable:
 
         # Ensure there are enough empty slots for the new tokens plus
         # lookahead slots
-        self.ensure_num_empty_slots(num_empty_slots=len(token_ids) +
-                                    num_lookahead_slots)
-
-        # Update the blocks with the new tokens
-        blocks = self._blocks[self._num_full_slots // self._block_size:]
-        token_blocks = self._chunk_token_blocks_for_append(token_ids)
-
-        for block, token_block in zip(blocks, token_blocks):
-            block.append_token_ids(token_block)
+        needed_slots = len(token_ids) + num_lookahead_slots
+        current_idx = 0
+        first_empty_block_index = self._find_first_not_full_block()
+        for i in range(first_empty_block_index, len(self._blocks)):
+            not_full_block = self._blocks[i]
+            if current_idx < len(token_ids):
+                token_append_num = min(not_full_block.num_empty_slots, len(token_ids) - current_idx)
+                not_full_block.append_token_ids(token_ids[current_idx:current_idx+token_append_num])
+                current_idx += token_append_num
+            needed_slots -= not_full_block.num_empty_slots
+        
+        # allocate new blocks
+        sub_block_count = 256
+        while needed_slots > 0:
+            while (sub_block_count * self._block_size) > needed_slots:
+                sub_block_count //= 2
+            block = self._allocator.allocate_mutable(prev_block=self._blocks[-1],
+                                            device=Device.GPU, size=sub_block_count)
+            needed_slots -= sub_block_count * self._block_size
+            if current_idx < len(token_ids):
+                token_append_num = min(block.num_empty_slots, len(token_ids) - current_idx)
+                block.append_token_ids(token_ids[current_idx:current_idx+token_append_num])
+                current_idx += token_append_num
+            self._blocks.append(block)
 
         self._num_full_slots += len(token_ids)
-
-    def ensure_num_empty_slots(self, num_empty_slots: int) -> None:
-        """Ensures that the BlockTable has at least the specified number of
-        empty slots available.
-
-        This method checks if the BlockTable has enough empty slots (i.e.,
-        available space) to accommodate the requested number of tokens. If not,
-        it allocates additional blocks on the GPU to ensure that the required
-        number of empty slots is available.
-
-        Args:
-            num_empty_slots (int): The minimum number of empty slots required.
-        """
-        # Currently the block table only supports
-        # appending tokens to GPU blocks.
-        device = Device.GPU
-        assert self._is_allocated
-
-        if self._num_empty_slots >= num_empty_slots:
-            return
-
-        slots_to_allocate = num_empty_slots - self._num_empty_slots
-        blocks_to_allocate = cdiv(slots_to_allocate, self._block_size)
-
-        for _ in range(blocks_to_allocate):
-            assert len(self._blocks) > 0
-            self._blocks.append(
-                self._allocator.allocate_mutable(prev_block=self._blocks[-1],
-                                                 device=device))
 
     def fork(self) -> "BlockTable":
         """Creates a new BlockTable instance with a copy of the blocks from the
@@ -213,6 +207,7 @@ class BlockTable:
             self._allocator.free(block)
         self._blocks = []
 
+    #TODO mxk
     @property
     def physical_block_ids(self) -> List[Optional[int]]:
         """Returns a list of physical block indices for the blocks in the
@@ -249,12 +244,12 @@ class BlockTable:
         # ones after the appended ones.
         return sequence_token_ids[self.num_full_slots:]
 
-    def _allocate_blocks_for_token_ids(self, prev_block: Optional[Block],
+    def _allocate_blocks_for_token_ids(self, prev_block: Optional[CompoundBlock],
                                        token_ids: List[int],
-                                       device: Device) -> List[Block]:
-        blocks: List[Block] = []
+                                       device: Device) -> List[CompoundBlock]:
+        blocks: List[CompoundBlock] = []
         for block_token_ids in chunk_list(token_ids, self._block_size):
-            if len(block_token_ids) == self._block_size:
+            if len(block_token_ids) % self._block_size == 0:
                 # If the block is full, create an immutable block.
                 prev_block = self._allocator.allocate_immutable(
                     prev_block, token_ids=block_token_ids, device=device)
@@ -284,7 +279,7 @@ class BlockTable:
         return len(self._blocks) > 0
 
     @property
-    def blocks(self) -> Optional[List[Block]]:
+    def blocks(self) -> Optional[List[CompoundBlock]]:
         return self._blocks
 
     @property
@@ -310,20 +305,10 @@ class BlockTable:
         This is required for the scheduler to determine whether a sequence can
         continue generation, or if it must be preempted.
         """
-
-        all_token_ids = token_ids + [-1] * num_lookahead_slots
-        token_blocks = self._chunk_token_blocks_for_append(all_token_ids)
-        return len(token_blocks)
-
-    def _chunk_token_blocks_for_append(
-            self, token_ids: List[int]) -> List[List[int]]:
-        """Split the token ids into block-sized chunks so they can be easily
-        appended to blocks. The first such "token block" may have less token ids
-        than the block size, since the last allocated block may be partially
-        full.
-        """
-        first_chunk_size = self._block_size - (self._num_full_slots %
-                                               self._block_size)
-        token_blocks = [token_ids[:first_chunk_size]] + chunk_list(
-            token_ids[first_chunk_size:], self._block_size)
-        return token_blocks
+        added_slots = num_lookahead_slots + len(token_ids) - self._num_empty_slots
+        touched = 0
+        if added_slots > 0:
+            touched += cdiv(added_slots, self._block_size)
+        # if self._num_empty_slots > 0:
+        #     touched += cdiv(min(self._num_empty_slots, num_lookahead_slots + len(token_ids)), self._block_size)
+        return touched
