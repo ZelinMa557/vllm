@@ -325,7 +325,8 @@ if __name__ == "__main__":
                         'the model executor, which can range from 0 to 1.'
                         'If unspecified, will use the default value of 0.9.')
     parser.add_argument("--enforce-eager",
-                        action="store_true",
+                        type=bool,
+                        default=True,
                         help="enforce eager execution")
     parser.add_argument(
         '--kv-cache-dtype',

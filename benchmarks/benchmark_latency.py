@@ -157,7 +157,8 @@ if __name__ == '__main__':
         'for FP32 and FP16 models, and BF16 precision '
         'for BF16 models.')
     parser.add_argument('--enforce-eager',
-                        action='store_true',
+                        type=bool,
+                        default=True,
                         help='enforce eager mode and disable CUDA graph')
     parser.add_argument(
         '--kv-cache-dtype',
@@ -202,7 +203,7 @@ if __name__ == '__main__':
         action='store_true',
         help='If True, the prefill requests can be chunked based on the '
         'max_num_batched_tokens')
-    parser.add_argument('--use-v2-block-manager', action='store_true')
+    parser.add_argument('--use-v2-block-manager', type=bool, default=True)
     parser.add_argument(
         "--ray-workers-use-nsight",
         action='store_true',
