@@ -1,7 +1,7 @@
 from typing import Dict, FrozenSet, List, Optional, Tuple
 
 from vllm.core.block.interfaces import (CompoundBlock, BlockAllocator, BlockId,
-                                        DeviceAwareBlockAllocator)
+                                        DeviceAwareBlockAllocator, BlockInfo)
 from vllm.core.block.buddy_allocator import BuddyAllocator, CompoundBlockImpl
 from vllm.core.block.prefix_caching_block import PrefixCachingBlockAllocator
 from vllm.utils import Device
@@ -87,7 +87,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
             Device.GPU: gpu_block_allocator,
         }
 
-        self._swap_mapping: Dict[int, int] = {}
+        # self._swap_mapping: Dict[BlockInfo, BlockInfo] = {}
         self._null_block: Optional[CompoundBlock] = None
 
         self._block_ids_to_allocator: Dict[int, BlockAllocator] = {}
@@ -197,7 +197,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         return self._allocators[device].get_physical_block_id(absolute_id)
 
     def swap(self, blocks: List[CompoundBlock], source_device: Device,
-             dest_device: Device) -> Dict[int, int]:
+             dest_device: Device) -> Tuple[List[BlockInfo], List[BlockInfo], CompoundBlock]:
         """Execute the swap for the given blocks from source_device
         on to dest_device, save the current swap mapping and append 
         them to the accumulated `self._swap_mapping` for each 
@@ -212,17 +212,11 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
             Dict[int, int]: Swap mapping from source_device
                 on to dest_device.
         """
-        source_block_ids = [block.block_id for block in blocks]
-        self._allocators[source_device].swap_out(blocks)
-        self._allocators[dest_device].swap_in(blocks)
-        dest_block_ids = [block.block_id for block in blocks]
+        
+        source_block_info = self._allocators[source_device].swap_out(blocks)
+        dest_block_info, new_allocated_block = self._allocators[dest_device].swap_in(blocks)
 
-        current_swap_mapping: Dict[int, int] = {}
-        for src, dest in zip(source_block_ids, dest_block_ids):
-            if src is not None and dest is not None:
-                self._swap_mapping[src] = dest
-                current_swap_mapping[src] = dest
-        return current_swap_mapping
+        return source_block_info, dest_block_info, new_allocated_block
 
     def get_num_blocks_touched(self,
                                blocks: List[CompoundBlock],
@@ -294,9 +288,10 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         Returns:
             List[Tuple[int, int]]: A mapping of source to destination block IDs.
         """
-        mapping = self._swap_mapping.copy()
-        self._swap_mapping.clear()
-        return list(mapping.items())
+        pass
+        # mapping = self._swap_mapping.copy()
+        # self._swap_mapping.clear()
+        # return list(mapping.items())
 
 
 class NullBlock(CompoundBlock):

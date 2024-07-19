@@ -392,6 +392,7 @@ class ModelRunner:
                         # chunked prefill or decode
                         block_table = seq_group_metadata.block_tables[seq_id]
                         if curr_sliding_window_blocks is not None:
+                            assert False, "curr_sliding_window_blocks should be None"
                             block_table = block_table[
                                 -curr_sliding_window_blocks:]
                         if self.attn_backend.get_name() == "flashinfer":
@@ -483,15 +484,26 @@ class ModelRunner:
                     # to save memory.
                     start_idx = max(0, query_len - self.sliding_window)
 
-                for i in range(context_len, seq_len):
-                    if i < start_idx:
-                        slot_mapping.append(_PAD_SLOT_ID)
-                        continue
+                i = 0
+                for entry in block_table:
+                    entry_size = (entry >> 24)
+                    block_number = (entry & ((1<<24)-1))
+                    start_slot = block_number * self.block_size
+                    end_slot = start_slot + entry_size * self.block_size
+                    
+                    if (i + entry_size * self.block_size) <= seq_len:
+                        slot_mapping.extend((j for j in range(start_slot, end_slot)))
+                        i += entry_size * self.block_size
+                    else:
+                        slot_mapping.extend((j for j in range(start_slot, start_slot + seq_len - i)))
+                        break
+                
+                if (start_idx > 0):
+                    for i in range(0, start_idx):
+                        slot_mapping[i] = _PAD_SLOT_ID
+                if context_len > 0:
+                    slot_mapping = slot_mapping[context_len:]
 
-                    block_number = block_table[i // self.block_size]
-                    block_offset = i % self.block_size
-                    slot = block_number * self.block_size + block_offset
-                    slot_mapping.append(slot)
 
         batch_size = len(input_tokens)
         max_query_len = max(query_lens)
@@ -533,7 +545,7 @@ class ModelRunner:
                 block_tables,
                 max_len=max_block_table_len,
                 pad=0,
-                dtype=torch.int,
+                dtype=torch.uint32,
                 device=self.device,
             )
         assert max_query_len > 0, ("query_lens: {}".format(query_lens))

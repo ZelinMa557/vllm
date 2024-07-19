@@ -207,6 +207,9 @@ class BlockTable:
             self._allocator.free(block)
         self._blocks = []
 
+    def get_entries(self) -> List[int]:
+        return [block.get_entry() for block in self.blocks]
+    
     #TODO mxk
     @property
     def physical_block_ids(self) -> List[Optional[int]]:
@@ -223,6 +226,9 @@ class BlockTable:
                 BlockTable.
         """
         assert self._is_allocated
+        phy_blk_ids = []
+        for block in self.blocks:
+            phy_blk_ids.extend(block.physical_block_ids)
         return [block.block_id for block in self._blocks]
 
     def get_unseen_token_ids(self, sequence_token_ids: List[int]) -> List[int]:

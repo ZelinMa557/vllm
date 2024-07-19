@@ -2,7 +2,7 @@ from typing import FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from vllm.core.block.common import (CopyOnWriteTracker, RefCounter,
                                     get_all_blocks_recursively)
-from vllm.core.block.interfaces import CompoundBlock, BlockAllocator, BlockId, Device
+from vllm.core.block.interfaces import CompoundBlock, BlockAllocator, BlockId, Device, BlockInfo
 from vllm.utils import cdiv
 from math import log, floor
 Refcount = int
@@ -287,35 +287,40 @@ class BuddyAllocator(BlockAllocator):
         # seqs, also we compare the empty slots in the mutable blocks with
         # lookahead slots to get the number of unique new block that are
         # needed.
-        old_block_set = set()
+        block_id_size_map = {}
         new_block_count = 0
         # TODO(cade): make sure the logic is correct and clean it up.
         for block in blocks:
             if not block.is_full and num_lookahead_slots != 0:
-                if block.num_empty_slots >= num_lookahead_slots:
-                    new_block_count += 1
-                else:
+                if block.num_empty_slots < num_lookahead_slots:
                     new_block_count += cdiv(
                         num_lookahead_slots - block.num_empty_slots,
                         self._block_size)
-            else:
-                old_block_set.add(block.block_id)
-        num_touched_blocks = new_block_count + len(old_block_set)
+            block_id_size_map[block.start_physical_block_id] = block.num_sub_blocks
+        num_touched_blocks = new_block_count + sum(block_id_size_map.values())
         return num_touched_blocks
 
-    def swap_out(self, blocks: List[CompoundBlock]) -> None:
+    def swap_out(self, blocks: List[CompoundBlock]) -> List[BlockInfo]:
+        res = [BlockInfo(block.start_physical_block_id, block.num_sub_blocks) for block in blocks]
         for block in blocks:
             self.free(block)
+        return res
 
-    def swap_in(self, blocks: List[CompoundBlock]) -> None:
+    def swap_in(self, blocks: List[CompoundBlock]) -> Tuple[List[BlockInfo], CompoundBlock]:
+        #TODO(mxk) add compaction here! needs to refact the whole swap logic
+        last_alloc = None
+        res = []
         for block in blocks:
             if block.is_full:
-                alloc = self.allocate_immutable(block.prev_block,
-                                                block.token_ids)
+                alloc = self.allocate_immutable(last_alloc,
+                                                block.token_ids, block.num_sub_blocks)
             else:
-                alloc = self.allocate_mutable(block.prev_block)
+                alloc = self.allocate_mutable(last_alloc, block.num_sub_blocks)
                 alloc.append_token_ids(block.token_ids)
-            block.block_id = alloc.block_id
+            last_alloc = alloc
+            block.start_physical_block_id = alloc.start_physical_block_id
+            res.append(BlockInfo(last_alloc.start_physical_block_id, last_alloc.num_sub_blocks))
+        return res, last_alloc
 
 
 class CompoundBlockImpl(CompoundBlock):
@@ -428,3 +433,15 @@ class CompoundBlockImpl(CompoundBlock):
     @property
     def content_hash(self) -> Optional[int]:
         return None
+
+    def get_entry(self) -> int:
+        return ((self.num_sub_blocks - 1) << 24) + self._start_sub_block_id
+    
+    @property
+    def physical_block_ids(self) -> List[int]:
+        return [i for i in range(self._start_sub_block_id, self._start_sub_block_id+\
+                                 self.num_sub_blocks)]
+    
+    @property
+    def start_physical_block_id(self) -> Optional[int]:
+        return self._start_sub_block_id

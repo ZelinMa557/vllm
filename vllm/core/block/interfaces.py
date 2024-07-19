@@ -2,6 +2,13 @@ from abc import ABC, abstractmethod
 from typing import Dict, FrozenSet, List, Optional, Protocol, Tuple
 
 from vllm.utils import Device
+from dataclasses import dataclass
+@dataclass
+class BlockInfo:
+    start_phy_block_id: int
+    num_sub_blocks: int
+    def to_list(self):
+        return (i for i in range(self.start_phy_block_id, self.num_sub_blocks))
 
 BlockId = int
 
@@ -15,6 +22,11 @@ class CompoundBlock(ABC):
     @property
     @abstractmethod
     def start_block_id(self) -> Optional[int]:
+        pass
+
+    @property
+    @abstractmethod
+    def start_physical_block_id(self) -> Optional[int]:
         pass
     
     @property
@@ -31,6 +43,15 @@ class CompoundBlock(ABC):
     @property
     @abstractmethod
     def token_ids(self) -> List[int]:
+        pass
+
+    @abstractmethod
+    def get_entry(self) -> int:
+        pass
+    
+    @abstractmethod
+    @property
+    def physical_block_ids(self) -> List[int]:
         pass
 
     @property
@@ -127,11 +148,11 @@ class BlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def swap_out(self, blocks: List[CompoundBlock]) -> None:
+    def swap_out(self, blocks: List[CompoundBlock]) -> List[BlockInfo]:
         pass
 
     @abstractmethod
-    def swap_in(self, blocks: List[CompoundBlock]) -> None:
+    def swap_in(self, blocks: List[CompoundBlock]) -> Tuple[List[BlockInfo], CompoundBlock]:
         pass
 
     @property
@@ -163,7 +184,7 @@ class BlockAllocator(ABC):
         pass
 
     @abstractmethod
-    def promote_to_immutable_block(self, block: CompoundBlock) -> CompoundBlockId:
+    def promote_to_immutable_block(self, block: CompoundBlock) -> BlockId:
         """NOTE: This should not be used besides Block"""
         pass
 
@@ -237,7 +258,7 @@ class DeviceAwareBlockAllocator(ABC):
 
     @abstractmethod
     def swap(self, blocks: List[CompoundBlock], source_device: Device,
-             dest_device: Device) -> Dict[int, int]:
+             dest_device: Device) -> Tuple[List[BlockInfo], List[BlockInfo], CompoundBlock]:
         pass
 
     @abstractmethod
