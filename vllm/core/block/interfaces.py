@@ -49,8 +49,8 @@ class CompoundBlock(ABC):
     def get_entry(self) -> int:
         pass
     
-    @abstractmethod
     @property
+    @abstractmethod
     def physical_block_ids(self) -> List[int]:
         pass
 
