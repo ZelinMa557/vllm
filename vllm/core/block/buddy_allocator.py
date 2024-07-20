@@ -53,11 +53,12 @@ class BuddyAllocator(BlockAllocator):
             refcounter=self._refcounter.as_readonly(),
             allocator=self,
         )
+        self._create_block = create_block
+        self._block_size = 16
 
     def allocate_immutable(self,
                            prev_block: Optional[CompoundBlock],
                            token_ids: List[int],
-                           size: int,
                            device: Optional[Device] = None) -> "CompoundBlock":
         """Allocates a new immutable block with the given token IDs, linked to
         the previous block.
@@ -72,7 +73,9 @@ class BuddyAllocator(BlockAllocator):
             Block: The newly allocated immutable block.
         """
         assert device is None
-        block = self.allocate_mutable(prev_block=prev_block, size = size)
+        block = self.allocate_mutable(prev_block=prev_block,\
+                                       size = \
+                                        (len(token_ids)+self._block_size-1)//self._block_size)
         block.append_token_ids(token_ids)
         return block
 
@@ -95,9 +98,10 @@ class BuddyAllocator(BlockAllocator):
         return self._create_block(
             prev_block=prev_block,
             token_ids=[],
-            block_id=block_id,
-            block_size=self._block_size,
+            sub_block_size=self._block_size,
             allocator=self,
+            num_sub_blocks=size,
+            start_sub_block_id=block_id
         )
 
     def free(self, block: CompoundBlock) -> None:
@@ -105,7 +109,7 @@ class BuddyAllocator(BlockAllocator):
         block_id = block.start_block_id
         if self._refcounter.decr(block_id) > 0:
             return
-        order = self._size_order_mp[block.num_blocks]
+        order: int = self._size_order_mp[block.num_sub_blocks]
         while order < MAX_ORDER:
             free_list = self._free_lists[order]
             if order == MAX_ORDER-1:
@@ -139,31 +143,39 @@ class BuddyAllocator(BlockAllocator):
         for block in source_blocks:
 
             # Increment refcount for each block.
-            assert block.block_id is not None
-            refcount = self._refcounter.incr(block.block_id)
+            refcount = self._refcounter.incr(block.start_physical_block_id)
             assert refcount != 1, "can't fork free'd block"
 
             forked_blocks.append(
                 self._create_block(
                     prev_block=prev_block,
                     token_ids=block.token_ids,
-                    block_id=block.block_id,
-                    block_size=self._block_size,
+                    sub_block_size=self._block_size,
                     allocator=self,
+                    num_sub_blocks=block.num_sub_blocks,
+                    start_sub_block_id=block.start_physical_block_id
                 ))
             prev_block = forked_blocks[-1]
 
         return forked_blocks
 
     def get_num_free_blocks(self) -> int:
-        return len(self._free_block_indices)
+        count = 0
+        for (order, free_list) in self._free_lists:
+            count += self._order_size_mp[order] * len(free_list)
+        return count
 
     def get_num_total_blocks(self) -> int:
-        return len(self._all_block_indices)
+        return self._total_blocks
+
+    def _print_internal_states(self):
+        for i, free_list in enumerate(self._free_lists):
+            print(f"order: {i+1} compound blocks: {len(free_list)} total blocks: {len(free_list)*self._order_size_mp[i]}")
+            print("detail:", free_list)
 
     def _allocate_new_block_id(self, size: int) -> BlockId:
-        order = self._size_order_mp[size]
-        free_list = self._free_lists[order]
+        order: int = self._size_order_mp[size]
+        free_list: List[int] = self._free_lists[order]
         if len(free_list) > 0:
             block_id = free_list.pop()
             self._refcounter.incr(block_id)
@@ -173,6 +185,7 @@ class BuddyAllocator(BlockAllocator):
         while len(self._free_lists[non_empty_order]) == 0:
             non_empty_order += 1
             if non_empty_order == MAX_ORDER:
+                self._print_internal_states()
                 raise BlockAllocator.NoFreeBlocksError()
 
         while non_empty_order > order:
@@ -353,7 +366,7 @@ class CompoundBlockImpl(CompoundBlock):
                  num_sub_blocks: Optional[int] = None,
                  start_sub_block_id: Optional[int] = None,
                  _cow_target: Optional[CompoundBlock] = None):
-        self._token_ids: List[int] = []
+        self._token_ids: List[int] = token_ids
         self._sub_block_size = sub_block_size
         self._prev_block = prev_block
         self._allocator = allocator
@@ -361,6 +374,8 @@ class CompoundBlockImpl(CompoundBlock):
         self._start_sub_block_id = start_sub_block_id
         self._cow_target = _cow_target if _cow_target is not None else self
         self._num_empty_slots = sub_block_size * num_sub_blocks
+        self._num_empty_slots -= len(token_ids)
+        assert self._num_empty_slots >= 0
         self._append_token_ids_no_cow(token_ids)
 
     def append_token_ids(self, token_ids: List[int]) -> None:

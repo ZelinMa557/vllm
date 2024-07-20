@@ -124,7 +124,7 @@ class BlockAllocator(ABC):
 
     @abstractmethod
     def allocate_immutable(self, prev_block: Optional[CompoundBlock],
-                           token_ids: List[int], size: int) -> CompoundBlock:
+                           token_ids: List[int]) -> CompoundBlock:
         pass
 
     @abstractmethod
@@ -153,11 +153,6 @@ class BlockAllocator(ABC):
 
     @abstractmethod
     def swap_in(self, blocks: List[CompoundBlock]) -> Tuple[List[BlockInfo], CompoundBlock]:
-        pass
-
-    @property
-    @abstractmethod
-    def all_block_ids(self) -> FrozenSet[int]:
         pass
 
     @abstractmethod
@@ -224,11 +219,6 @@ class DeviceAwareBlockAllocator(ABC):
 
     @abstractmethod
     def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
-        pass
-
-    @property
-    @abstractmethod
-    def all_block_ids(self) -> FrozenSet[int]:
         pass
 
     @abstractmethod

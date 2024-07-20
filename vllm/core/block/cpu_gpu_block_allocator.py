@@ -76,11 +76,9 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         )
 
     def __init__(self, cpu_block_allocator: BlockAllocator,
-                 gpu_block_allocator: BlockAllocator):
-        assert not (
-            cpu_block_allocator.all_block_ids
-            & gpu_block_allocator.all_block_ids
-        ), "cpu and gpu block allocators can't have intersection of block ids"
+                 gpu_block_allocator: BlockAllocator,
+                 num_gpu_block: int,
+                 num_cpu_block: int):
 
         self._allocators = {
             Device.CPU: cpu_block_allocator,
@@ -89,11 +87,8 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
 
         # self._swap_mapping: Dict[BlockInfo, BlockInfo] = {}
         self._null_block: Optional[CompoundBlock] = None
-
-        self._block_ids_to_allocator: Dict[int, BlockAllocator] = {}
-        for _, allocator in self._allocators.items():
-            for block_id in allocator.all_block_ids:
-                self._block_ids_to_allocator[block_id] = allocator
+        self._num_gpu_block = num_gpu_block
+        self._num_cpu_block = num_cpu_block
 
     def allocate_or_get_null_block(self) -> CompoundBlock:
         if self._null_block is None:
@@ -134,6 +129,10 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         """
         return self._allocators[device].allocate_immutable(
             prev_block, token_ids, size)
+    
+    def _get_allocator_by_block_id(self, block_id: int) -> BlockAllocator:
+        return self._allocators[Device.GPU] \
+            if block_id < self._num_gpu_block else self._num_cpu_block
 
     def free(self, block: CompoundBlock) -> None:
         """Frees the memory occupied by the given block.
@@ -146,7 +145,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
             return
         block_id = block.block_id
         assert block_id is not None
-        allocator = self._block_ids_to_allocator[block_id]
+        allocator = self._get_allocator_by_block_id(block_id)
         return allocator.free(block)
 
     def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
@@ -164,7 +163,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         assert not isinstance(last_block, NullBlock)
         block_id = last_block.block_id
         assert block_id is not None
-        allocator = self._block_ids_to_allocator[block_id]
+        allocator = self._get_allocator_by_block_id(block_id)
         return allocator.fork(last_block)
 
     def get_num_free_blocks(self, device: Device) -> int:
@@ -269,10 +268,6 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         device = Device.GPU
         return self._allocators[device].get_common_computed_block_ids(
             seq_block_ids)
-
-    @property
-    def all_block_ids(self) -> FrozenSet[int]:
-        return frozenset(self._block_ids_to_allocator.keys())
 
     def promote_to_immutable_block(self, block: CompoundBlock) -> BlockId:
         raise NotImplementedError
