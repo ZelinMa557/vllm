@@ -29,6 +29,7 @@ class BuddyAllocator(BlockAllocator):
         self,
         create_block: CompoundBlock.Factory,
         num_blocks: int,
+        block_size: int,
         first_block_id: int
     ):
         if block_ids is None:
@@ -54,7 +55,7 @@ class BuddyAllocator(BlockAllocator):
             allocator=self,
         )
         self._create_block = create_block
-        self._block_size = 16
+        self._block_size = block_size
 
     def allocate_immutable(self,
                            prev_block: Optional[CompoundBlock],

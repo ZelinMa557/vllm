@@ -52,22 +52,19 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
             - The block IDs are assigned contiguously, with GPU block IDs coming
                 before CPU block IDs.
         """
-        block_ids = list(range(num_gpu_blocks + num_cpu_blocks))
-        gpu_block_ids = block_ids[:num_gpu_blocks]
-        cpu_block_ids = block_ids[num_gpu_blocks:]
         assert allocator_type == "naive"
         gpu_allocator: BlockAllocator = BuddyAllocator(
             create_block=CompoundBlock,  # type: ignore
             num_blocks=num_gpu_blocks,
             block_size=block_size,
-            block_ids=gpu_block_ids,
+            first_block_id = 0,
         )
 
         cpu_allocator: BlockAllocator = BuddyAllocator(
             create_block=CompoundBlock,  # type: ignore
             num_blocks=num_cpu_blocks,
             block_size=block_size,
-            block_ids=cpu_block_ids,
+            first_block_id=num_gpu_blocks,
         )
 
         return CpuGpuBlockAllocator(
