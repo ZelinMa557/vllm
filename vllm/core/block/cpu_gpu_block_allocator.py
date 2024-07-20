@@ -3,7 +3,7 @@ from typing import Dict, FrozenSet, List, Optional, Tuple
 from vllm.core.block.interfaces import (CompoundBlock, BlockAllocator, BlockId,
                                         DeviceAwareBlockAllocator, BlockInfo)
 from vllm.core.block.buddy_allocator import BuddyAllocator, CompoundBlockImpl
-from vllm.core.block.prefix_caching_block import PrefixCachingBlockAllocator
+# from vllm.core.block.prefix_caching_block import PrefixCachingBlockAllocator
 from vllm.utils import Device
 
 
