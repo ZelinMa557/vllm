@@ -1,6 +1,6 @@
 from typing import Dict, Iterable, List, Optional, Protocol, Tuple
 
-from vllm.core.block.interfaces import Block, BlockAllocator
+from vllm.core.block.interfaces import CompoundBlock, BlockAllocator
 
 BlockId = int
 RefCount = int
@@ -173,7 +173,7 @@ class CopyOnWriteTracker:
         return cows
 
 
-def get_all_blocks_recursively(last_block: Block) -> List[Block]:
+def get_all_blocks_recursively(last_block: CompoundBlock) -> List[CompoundBlock]:
     """Retrieves all the blocks in a sequence starting from the last block.
 
     This function recursively traverses the sequence of blocks in reverse order,
@@ -188,11 +188,11 @@ def get_all_blocks_recursively(last_block: Block) -> List[Block]:
             appear.
     """
 
-    def recurse(block: Block, lst: List[Block]) -> None:
+    def recurse(block: CompoundBlock, lst: List[CompoundBlock]) -> None:
         if block.prev_block is not None:
             recurse(block.prev_block, lst)
         lst.append(block)
 
-    all_blocks: List[Block] = []
+    all_blocks: List[CompoundBlock] = []
     recurse(last_block, all_blocks)
     return all_blocks
