@@ -90,7 +90,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
     def allocate_or_get_null_block(self) -> CompoundBlock:
         if self._null_block is None:
             self._null_block = NullBlock(
-                self.allocate_mutable(None, Device.GPU))
+                self.allocate_mutable(None, Device.GPU, 1))
         return self._null_block
 
     def allocate_mutable(self, prev_block: Optional[CompoundBlock],
@@ -304,7 +304,7 @@ class NullBlock(CompoundBlock):
 
     @property
     def block_id(self):
-        return self._proxy.block_id
+        return self._proxy.start_physical_block_id
 
     @block_id.setter
     def block_id(self, value: Optional[BlockId]):

@@ -261,8 +261,11 @@ class BlockTable:
                     prev_block, token_ids=block_token_ids, device=device)
             else:
                 # Else, partially fill a mutable block with token ids.
+                import math
+                tmp = 2 ** math.ceil(math.log(cdiv(len(block_token_ids), self._block_size), 2))
+                alloc_size = max(tmp, 8)
                 prev_block = self._allocator.allocate_mutable(
-                    prev_block=prev_block, device=device)
+                    prev_block=prev_block, size=alloc_size, device=device)
                 prev_block.append_token_ids(block_token_ids)
             blocks.append(prev_block)
 

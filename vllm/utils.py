@@ -335,6 +335,10 @@ def chunk_list(lst: List[T], chunk_size: int) -> List[List[T]]:
     current_index: int = 0
     chunk_length: int = chunk_size * 256
     while current_index < len(lst):
+        # make room for decode
+        if len(lst) - current_index <= chunk_size * 8:
+            result.append(lst[current_index:])
+            break
         # Determine the size of the next chunk
         while chunk_length > len(lst) - current_index:
             chunk_length = chunk_length // 2

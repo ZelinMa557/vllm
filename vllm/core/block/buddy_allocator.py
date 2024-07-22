@@ -32,12 +32,8 @@ class BuddyAllocator(BlockAllocator):
         block_size: int,
         first_block_id: int
     ):
-        if block_ids is None:
-            block_ids = range(num_blocks)
         self._free_lists : List[List[int]] = [[] for _ in range(MAX_ORDER)]
-        #TODO rewrite RefCounter and CopyOnWriteTracker
-        remain_blocks = len(block_ids)
-        first_block_id = block_ids[0]
+        remain_blocks = num_blocks
         self._offset = first_block_id
         self._total_blocks = remain_blocks
         self._order_size_mp = [pow(2, i+1) for i in range(MAX_ORDER)]
@@ -204,12 +200,12 @@ class BuddyAllocator(BlockAllocator):
 
     def _buddy_block_id(self, id_, order) -> int:
         id_offset = id_ - self._offset
-        this_order_size = self._order_size_mp[order]
         higher_order_size = self._order_size_mp[order+1]
         if id_offset % higher_order_size != 0:
+            this_order_size = self._order_size_mp[order]
             return id_ - this_order_size
         else:
-            return id_ + this_order_size
+            return id_
 
 
     def get_physical_block_id(self, absolute_id: int) -> int:

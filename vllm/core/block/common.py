@@ -146,7 +146,7 @@ class CopyOnWriteTracker:
 
             # Allocate a fresh new block.
             block_id = self._allocator.allocate_mutable(
-                prev_block=block.prev_block).block_id
+                prev_block=block.prev_block, size=block.num_sub_blocks).start_physical_block_id
 
             # Track src/dst copy.
             assert src_block_id is not None
