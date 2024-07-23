@@ -298,6 +298,7 @@ class XFormersImpl(AttentionImpl[XFormersMetadata]):
                 assert out.shape == output[:num_prefill_tokens].shape
                 output[:num_prefill_tokens] = out
             else:
+                assert False, "currently do not support prefix-enabled atten"
                 # prefix-enabled attention
                 # TODO(Hai) this triton kernel has regression issue (broke) to
                 # deal with different data types between KV and FP8 KV cache,
