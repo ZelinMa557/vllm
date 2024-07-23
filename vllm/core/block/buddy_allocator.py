@@ -32,16 +32,18 @@ class BuddyAllocator(BlockAllocator):
         block_size: int,
         first_block_id: int
     ):
-        self._free_lists : List[List[int]] = [[] for _ in range(MAX_ORDER)]
+        self._free_lists : List[List[int]] = [[] for _ in range(MAX_ORDER+1)]
         remain_blocks = num_blocks
         self._offset = first_block_id
         self._total_blocks = remain_blocks
-        self._order_size_mp = [pow(2, i+1) for i in range(MAX_ORDER)]
-        self._size_order_mp = {pow(2, i+1): i for i in range(MAX_ORDER)}
+        self._order_size_mp = [pow(2, i) for i in range(MAX_ORDER+1)]
+        self._size_order_mp = {pow(2, i): i for i in range(MAX_ORDER+1)}
         while remain_blocks > 0:
-            order = min(floor(log(remain_blocks, 2)), MAX_ORDER) - 1
+            order = min(floor(log(remain_blocks, 2)), MAX_ORDER)
             free_list = self._free_lists[order]
             free_list.append(first_block_id)
+            assert first_block_id < (self._offset + num_blocks), \
+                f"block id {first_block_id} > ({self._offset} + {num_blocks})> " 
             size = self._order_size_mp[order]
             first_block_id += size
             remain_blocks -= size
@@ -107,9 +109,9 @@ class BuddyAllocator(BlockAllocator):
         if self._refcounter.decr(block_id) > 0:
             return
         order: int = self._size_order_mp[block.num_sub_blocks]
-        while order < MAX_ORDER:
+        while order <= MAX_ORDER:
             free_list = self._free_lists[order]
-            if order == MAX_ORDER-1:
+            if order == MAX_ORDER:
                 free_list.append(block_id)
                 break
             buddy_id = self._buddy_block_id(block_id, order)
@@ -181,7 +183,7 @@ class BuddyAllocator(BlockAllocator):
         non_empty_order = order+1
         while len(self._free_lists[non_empty_order]) == 0:
             non_empty_order += 1
-            if non_empty_order == MAX_ORDER:
+            if non_empty_order > MAX_ORDER:
                 self._print_internal_states()
                 raise BlockAllocator.NoFreeBlocksError()
 
@@ -195,7 +197,7 @@ class BuddyAllocator(BlockAllocator):
 
         block_id = self._free_lists[order].pop()
         self._refcounter.incr(block_id)
-        print(f"Debug: allocate block {block_id} size {size} offsets {self._offset}")
+        print(f"Debug: allocate block {block_id} size {size} offsets {self._offset} total blocks {self._total_blocks}")
         return block_id
 
 
