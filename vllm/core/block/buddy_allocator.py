@@ -102,8 +102,8 @@ class BuddyAllocator(BlockAllocator):
         )
 
     def free(self, block: CompoundBlock) -> None:
-        assert block.start_block_id is not None
-        block_id = block.start_block_id
+        assert block.start_physical_block_id is not None
+        block_id = block.start_physical_block_id
         if self._refcounter.decr(block_id) > 0:
             return
         order: int = self._size_order_mp[block.num_sub_blocks]
@@ -120,7 +120,7 @@ class BuddyAllocator(BlockAllocator):
             del free_list[index]
             order += 1
             block_id = min(block_id, buddy_id)
-        block.start_block_id = None
+        block.start_physical_block_id = None
 
     def fork(self, last_block: CompoundBlock) -> List[CompoundBlock]:
         """Creates a new sequence of blocks that shares the same underlying
@@ -426,17 +426,8 @@ class CompoundBlockImpl(CompoundBlock):
         return self._sub_block_size
     
     @property
-    def start_block_id(self) -> Optional[int]:
-        return self._start_block_id
-    
-    @property
     def num_sub_blocks(self) -> Optional[int]:
         return self._num_sub_blocks
-
-    @start_block_id.setter
-    def start_block_id(self, value: Optional[int]) -> None:
-        """NOTE: Do not use this API outside Block."""
-        self._start_block_id = value
 
     @property
     def prev_block(self) -> Optional["CompoundBlock"]:
@@ -457,3 +448,8 @@ class CompoundBlockImpl(CompoundBlock):
     @property
     def start_physical_block_id(self) -> Optional[int]:
         return self._start_sub_block_id
+    
+    @start_physical_block_id.setter
+    def start_physical_block_id(self, value: Optional[int]) -> None:
+        """NOTE: Do not use this API outside Block."""
+        self._start_physical_block_id = value

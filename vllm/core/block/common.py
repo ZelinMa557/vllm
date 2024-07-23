@@ -133,7 +133,7 @@ class CopyOnWriteTracker:
                 -write operation was performed, or the original block index if
                 no copy-on-write was necessary.
         """
-        block_id = block.start_block_id
+        block_id = block.start_physical_block_id
         if block_id is None:
             return block_id
 

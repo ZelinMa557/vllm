@@ -21,11 +21,6 @@ class CompoundBlock(ABC):
 
     @property
     @abstractmethod
-    def start_block_id(self) -> Optional[int]:
-        pass
-
-    @property
-    @abstractmethod
     def start_physical_block_id(self) -> Optional[int]:
         pass
     
@@ -34,11 +29,11 @@ class CompoundBlock(ABC):
     def num_sub_blocks(self) -> Optional[int]:
         pass
 
-    @start_block_id.setter
+    @start_physical_block_id.setter
     @abstractmethod
-    def start_block_id(self, value: Optional[int]) -> None:
+    def start_physical_block_id(self, value: Optional[int]) -> None:
         """NOTE: Do not use this API outside Block."""
-        self._start_block_id = value
+        self._start_physical_block_id = value
 
     @property
     @abstractmethod
