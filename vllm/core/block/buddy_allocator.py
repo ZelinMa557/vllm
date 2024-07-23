@@ -37,7 +37,7 @@ class BuddyAllocator(BlockAllocator):
         self._offset = first_block_id
         self._total_blocks = remain_blocks
         self._order_size_mp = [pow(2, i+1) for i in range(MAX_ORDER)]
-        self._size_order_mp = {(pow(2, i+1), i) for i in range(MAX_ORDER)}
+        self._size_order_mp = {pow(2, i+1): i for i in range(MAX_ORDER)}
         while remain_blocks > 0:
             order = min(floor(log(remain_blocks, 2)), MAX_ORDER) - 1
             free_list = self._free_lists[order]
