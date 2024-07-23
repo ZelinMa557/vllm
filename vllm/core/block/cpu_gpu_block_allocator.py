@@ -54,14 +54,14 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         """
         assert allocator_type == "naive"
         gpu_allocator: BlockAllocator = BuddyAllocator(
-            create_block=CompoundBlock,  # type: ignore
+            create_block=CompoundBlockImpl,  # type: ignore
             num_blocks=num_gpu_blocks,
             block_size=block_size,
             first_block_id = 0,
         )
 
         cpu_allocator: BlockAllocator = BuddyAllocator(
-            create_block=CompoundBlock,  # type: ignore
+            create_block=CompoundBlockImpl,  # type: ignore
             num_blocks=num_cpu_blocks,
             block_size=block_size,
             first_block_id=num_gpu_blocks,
