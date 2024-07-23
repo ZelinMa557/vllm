@@ -54,6 +54,7 @@ class BuddyAllocator(BlockAllocator):
         )
         self._create_block = create_block
         self._block_size = block_size
+        self._print_internal_states()
 
     def allocate_immutable(self,
                            prev_block: Optional[CompoundBlock],

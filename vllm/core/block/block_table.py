@@ -94,7 +94,7 @@ class BlockTable:
         self._num_full_slots = len(token_ids)
 
     def _find_first_not_full_block(self):
-        for i in range(len(self._blocks), -1, -1, -1):
+        for i in range(len(self._blocks)-1, -1, -1):
             if self._blocks[i].is_full:
                 return i+1
         return len(self._blocks)
