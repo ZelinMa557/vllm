@@ -160,6 +160,8 @@ class BlockTable:
         while needed_slots > 0:
             while (sub_block_count * self._block_size) > needed_slots:
                 sub_block_count //= 2
+            if sub_block_count == 0:
+                sub_block_count = 1
             block = self._allocator.allocate_mutable(prev_block=self._blocks[-1],
                                             device=Device.GPU, size=sub_block_count)
             needed_slots -= sub_block_count * self._block_size

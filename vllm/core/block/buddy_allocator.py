@@ -42,9 +42,9 @@ class BuddyAllocator(BlockAllocator):
             order = min(floor(log(remain_blocks, 2)), MAX_ORDER)
             free_list = self._free_lists[order]
             free_list.append(first_block_id)
-            assert first_block_id < (self._offset + num_blocks), \
-                f"block id {first_block_id} > ({self._offset} + {num_blocks})> " 
             size = self._order_size_mp[order]
+            assert (first_block_id + size) < (self._offset + num_blocks), \
+                f"block id {first_block_id} + {size} ({order})  > ({self._offset} + {num_blocks})> " 
             first_block_id += size
             remain_blocks -= size
         self._refcounter = RefCounter()
@@ -195,6 +195,7 @@ class BuddyAllocator(BlockAllocator):
             free_list = self._free_lists[non_empty_order]
             free_list.append(split_block_id)
             free_list.append(split_block_id + (size // 2))
+            print(f"split {split_block_id} order {non_empty_order+1} append {split_block_id},{split_block_id + (size // 2)}")
 
         block_id = self._free_lists[order].pop()
         self._refcounter.incr(block_id)
