@@ -241,7 +241,11 @@ class BlockSpaceManagerV2(BlockSpaceManager):
     def get_block_table(self, seq: Sequence) -> List[int]:
         assert seq.seq_id in self.block_tables
         block_table = self.block_tables[seq.seq_id]
-        return block_table.get_entries()
+        res = block_table.get_entries()
+        print("######### Debug Block Table ###############")
+        for i,entry in enumerate(res):
+            print(f"i: {i} entry size: {(entry>>24)+1} start physical block id: {entry&((1<<24)-1)}")
+        return res
 
     def get_cross_block_table(self, seq_group: SequenceGroup) -> List[int]:
         request_id = seq_group.request_id
