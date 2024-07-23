@@ -195,6 +195,7 @@ class BuddyAllocator(BlockAllocator):
 
         block_id = self._free_lists[order].pop()
         self._refcounter.incr(block_id)
+        print(f"Debug: allocate block {block_id} size {size} offsets {self._offset}")
         return block_id
 
 
