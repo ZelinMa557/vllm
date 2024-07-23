@@ -70,6 +70,8 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         return CpuGpuBlockAllocator(
             cpu_block_allocator=cpu_allocator,
             gpu_block_allocator=gpu_allocator,
+            num_gpu_block=num_gpu_blocks,
+            num_cpu_block=num_cpu_blocks
         )
 
     def __init__(self, cpu_block_allocator: BlockAllocator,
