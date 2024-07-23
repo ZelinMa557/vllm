@@ -202,7 +202,7 @@ class DeviceAwareBlockAllocator(ABC):
 
     @abstractmethod
     def allocate_immutable(self, prev_block: Optional[CompoundBlock],
-                           token_ids: List[int], device: Device, size: int) -> CompoundBlock:
+                           token_ids: List[int], device: Device) -> CompoundBlock:
         pass
 
     @abstractmethod

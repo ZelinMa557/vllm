@@ -111,7 +111,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         return self._allocators[device].allocate_mutable(prev_block, size)
 
     def allocate_immutable(self, prev_block: Optional[CompoundBlock],
-                           token_ids: List[int], device: Device, size: int) -> CompoundBlock:
+                           token_ids: List[int], device: Device) -> CompoundBlock:
         """Allocates a new immutable block with the provided token IDs on the
         specified device.
 
@@ -127,7 +127,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
                 token IDs.
         """
         return self._allocators[device].allocate_immutable(
-            prev_block, token_ids, size)
+            prev_block, token_ids)
     
     def _get_allocator_by_block_id(self, block_id: int) -> BlockAllocator:
         return self._allocators[Device.GPU] \
