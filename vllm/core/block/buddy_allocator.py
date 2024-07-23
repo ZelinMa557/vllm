@@ -384,8 +384,8 @@ class CompoundBlockImpl(CompoundBlock):
         """
         self._append_token_ids_no_cow(token_ids)
 
-        if self._start_block_id is not None:
-            self._start_block_id = (self._allocator.cow_block_if_not_appendable(
+        if self.start_physical_block_id is not None:
+            self.start_physical_block_id = (self._allocator.cow_block_if_not_appendable(
                 self._cow_target))
 
     def _append_token_ids_no_cow(self, token_ids: List[int]) -> None:
