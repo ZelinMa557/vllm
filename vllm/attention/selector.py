@@ -90,7 +90,7 @@ def which_attn_to_use(
     """Returns which flash attention backend to use."""
     # Default case.
     # use our implementation of paged attention, instead of flash_attn
-    selected_backend = _Backend.TORCH_SDPA
+    selected_backend = _Backend.XFORMERS
     return selected_backend
 
     # Check the environment variable and override if specified
