@@ -229,7 +229,7 @@ class BlockTable:
         phy_blk_ids = []
         for block in self.blocks:
             phy_blk_ids.extend(block.physical_block_ids)
-        return [block.block_id for block in self._blocks]
+        return [block.start_physical_block_id for block in self._blocks]
 
     def get_unseen_token_ids(self, sequence_token_ids: List[int]) -> List[int]:
         """Get the number of "unseen" tokens in the sequence.
