@@ -158,7 +158,7 @@ class BuddyAllocator(BlockAllocator):
 
     def get_num_free_blocks(self) -> int:
         count = 0
-        for (order, free_list) in self._free_lists:
+        for (order, free_list) in enumerate(self._free_lists):
             count += self._order_size_mp[order] * len(free_list)
         return count
 
