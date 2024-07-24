@@ -519,7 +519,7 @@ def _sample_with_torch(
                 "seq_groups": seq_groups,
             }
             print(f"Debug multinomial_samples[{sampling_type}]")
-            print(f"Debug probs[long_sample_indices] = {probs[long_sample_indices]}")
+            print(f"Debug probs = {probs} indices = {long_sample_indices}")
             print(f"max_best_of_in_batch = {max_best_of_in_batch} seeded_args = {seeded_args}")
             multinomial_samples[sampling_type] = _multinomial(
                 probs[long_sample_indices], max_best_of_in_batch,
