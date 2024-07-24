@@ -522,6 +522,7 @@ def _sample_with_torch(
             multinomial_samples[sampling_type] = _multinomial(
                 probs[long_sample_indices], max_best_of_in_batch,
                 **seeded_args)
+            print(f"Debug multinomial_samples[{sampling_type}] = {multinomial_samples[sampling_type]}")
 
             if sampled_token_ids_tensor is not None:
                 # Store sampled tokens in output tensor.
