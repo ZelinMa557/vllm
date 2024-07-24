@@ -767,7 +767,9 @@ class ModelRunner:
         )
 
         # Compute the logits.
+        print(f"Debug hidden_states = {hidden_states}, sampling_metadate = {sampling_metadata}")
         logits = self.model.compute_logits(hidden_states, sampling_metadata)
+        print(f"Debug logits = {logits}")
 
         # Only perform sampling in the driver worker.
         if not self.is_driver_worker:
