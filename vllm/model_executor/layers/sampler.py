@@ -490,6 +490,7 @@ def _sample_with_torch(
         seq_group_id = categorized_seq_group_ids[sampling_type]
         seq_groups = [sampling_metadata.seq_groups[i] for i in seq_group_id]
         sample_metadata[sampling_type] = (seq_group_id, seq_groups)
+        print(f"Debug long_sample_indices = {long_sample_indices}")
         long_sample_indices = sample_indices.long()
         if sampling_type == SamplingType.GREEDY:
             greedy_samples = torch.argmax(logprobs[long_sample_indices],
