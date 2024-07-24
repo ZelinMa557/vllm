@@ -96,7 +96,10 @@ class SamplingMetadata:
         num_prompts: int,
     ) -> None:
         self.seq_groups = seq_groups
+        print(f"Debug selected_token_indices = {selected_token_indices}")
         self.selected_token_indices = selected_token_indices
+        for a, b in categorized_sample_indices:
+            print(f"Debug Sample type = {a}, indice = {b}")
         self.categorized_sample_indices = categorized_sample_indices
         self.num_prompts = num_prompts
 
