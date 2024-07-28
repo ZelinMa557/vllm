@@ -138,6 +138,8 @@ if(NVCC_THREADS AND VLLM_GPU_LANG STREQUAL "CUDA")
   list(APPEND VLLM_GPU_FLAGS "--threads=${NVCC_THREADS}")
 endif()
 
+set(VLLM_GPU_FLAGS "${VLLM_GPU_FLAGS} -g -G")
+
 #
 # Define extension targets
 #
