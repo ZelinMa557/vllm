@@ -99,12 +99,13 @@ class PagedAttention:
     ) -> torch.Tensor:
         if blocksparse_vert_stride is not None and blocksparse_vert_stride > 1:
             # use blocksparse paged attention
+            assert False
             block_size = value_cache.size(-1)
             assert (blocksparse_block_size > 0 and
                     blocksparse_block_size % block_size == 0), \
                 (f"{blocksparse_block_size=} needs to be a multiple of"
                  f"{block_size=} used in block_tables.")
-
+        print(f"Debug enter PagedAttention forward_decode")
         output = torch.empty_like(query)
         block_size = value_cache.shape[3]
         num_seqs, num_heads, head_size = query.shape
@@ -180,6 +181,7 @@ class PagedAttention:
                 blocksparse_block_size,
                 blocksparse_head_sliding_step,
             )
+        print(f"Debug dy paged attention output = {output}")
         return output
 
     @staticmethod

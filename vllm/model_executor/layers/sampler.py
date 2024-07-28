@@ -490,7 +490,6 @@ def _sample_with_torch(
         seq_group_id = categorized_seq_group_ids[sampling_type]
         seq_groups = [sampling_metadata.seq_groups[i] for i in seq_group_id]
         sample_metadata[sampling_type] = (seq_group_id, seq_groups)
-        print(f"Debug sample_indices = {sample_indices}")
         long_sample_indices = sample_indices.long()
         if sampling_type == SamplingType.GREEDY:
             greedy_samples = torch.argmax(logprobs[long_sample_indices],
@@ -519,15 +518,10 @@ def _sample_with_torch(
             seeded_args = {} if sampling_type == SamplingType.RANDOM else {
                 "seq_groups": seq_groups,
             }
-            print(f"Debug multinomial_samples[{sampling_type}]")
-            print(f"Debug indices = {long_sample_indices}")
-            print(f"Debug probs = {probs}")
-            print(f"max_best_of_in_batch = {max_best_of_in_batch} seeded_args = {seeded_args}")
             multinomial_samples[sampling_type] = _multinomial(
                 probs[long_sample_indices], max_best_of_in_batch,
                 **seeded_args)
-            print(f"Debug multinomial_samples[{sampling_type}] = {multinomial_samples[sampling_type]}")
-
+            
             if sampled_token_ids_tensor is not None:
                 # Store sampled tokens in output tensor.
                 sampled_token_ids_tensor[
