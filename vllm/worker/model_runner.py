@@ -773,7 +773,6 @@ class ModelRunner:
         if not self.is_driver_worker:
             return None
 
-        print(f"Debug logits = {logits}")
         # Sample the next token.
         output = self.model.sample(
             logits=logits,

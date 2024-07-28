@@ -179,6 +179,7 @@ class BuddyAllocator(BlockAllocator):
         if len(free_list) > 0:
             block_id = free_list.pop()
             self._refcounter.incr(block_id)
+            print(f"Debug: allocate block {block_id} size {size} offsets {self._offset} total blocks {self._total_blocks}")
             return block_id
         
         non_empty_order = order+1
