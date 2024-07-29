@@ -142,7 +142,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         # Null block should never be freed
         if isinstance(block, NullBlock):
             return
-        block_id = block.block_id
+        block_id = block.start_physical_block_id
         assert block_id is not None
         allocator = self._get_allocator_by_block_id(block_id)
         return allocator.free(block)
@@ -160,7 +160,7 @@ class CpuGpuBlockAllocator(DeviceAwareBlockAllocator):
         """
         # do not attempt to fork the null block
         assert not isinstance(last_block, NullBlock)
-        block_id = last_block.block_id
+        block_id = last_block.start_physical_block_id
         assert block_id is not None
         allocator = self._get_allocator_by_block_id(block_id)
         return allocator.fork(last_block)
