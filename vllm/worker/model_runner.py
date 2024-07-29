@@ -486,7 +486,7 @@ class ModelRunner:
 
                 i = 0
                 for entry in block_table:
-                    entry_size = (entry >> 24)
+                    entry_size = (entry >> 24) + 1
                     block_number = (entry & ((1<<24)-1))
                     start_slot = block_number * self.block_size
                     end_slot = start_slot + entry_size * self.block_size
