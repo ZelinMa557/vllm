@@ -105,7 +105,7 @@ class PagedAttention:
                     blocksparse_block_size % block_size == 0), \
                 (f"{blocksparse_block_size=} needs to be a multiple of"
                  f"{block_size=} used in block_tables.")
-        print(f"Debug enter PagedAttention forward_decode")
+        #print(f"Debug enter PagedAttention forward_decode")
         output = torch.empty_like(query)
         block_size = value_cache.shape[3]
         num_seqs, num_heads, head_size = query.shape
@@ -181,7 +181,7 @@ class PagedAttention:
                 blocksparse_block_size,
                 blocksparse_head_sliding_step,
             )
-        print(f"Debug dy paged attention output = {output}")
+        #print(f"Debug dy paged attention output = {output}")
         return output
 
     @staticmethod

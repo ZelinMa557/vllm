@@ -757,8 +757,8 @@ class ModelRunner:
             model_executable = self.graph_runners[graph_batch_size]
         else:
             model_executable = self.model
-        print(f"Debug meta num-prefills = {attn_metadata.num_prefills}, prefill tokens {attn_metadata.num_prefill_tokens}, decode tokens {attn_metadata.num_decode_tokens},")
-        print(f"Debug meta slot_mapping = {attn_metadata.slot_mapping}")
+        #print(f"Debug meta num-prefills = {attn_metadata.num_prefills}, prefill tokens {attn_metadata.num_prefill_tokens}, decode tokens {attn_metadata.num_decode_tokens},")
+        #print(f"Debug meta slot_mapping = {attn_metadata.slot_mapping}")
         hidden_states = model_executable(
             input_ids=input_tokens,
             positions=input_positions,
@@ -766,7 +766,7 @@ class ModelRunner:
             attn_metadata=attn_metadata,
             **multi_modal_kwargs,
         )
-        print(f"Debug hidden states = {hidden_states}")
+        #print(f"Debug hidden states = {hidden_states}")
 
         # Compute the logits.
         logits = self.model.compute_logits(hidden_states, sampling_metadata)

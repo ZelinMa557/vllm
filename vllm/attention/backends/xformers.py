@@ -293,12 +293,12 @@ class XFormersImpl(AttentionImpl[XFormersMetadata]):
                 # normal attention.
                 # block tables are empty if the prompt does not have a cached
                 # prefix.
-                print(f"Debug Enter backend prefill")
+                #print(f"Debug Enter backend prefill")
                 out = self._run_memory_efficient_xformers_forward(
                     query, key, value, prefill_meta)
                 assert out.shape == output[:num_prefill_tokens].shape
                 output[:num_prefill_tokens] = out
-                print(f"Debug prefill out = {out}")
+                #print(f"Debug prefill out = {out}")
             else:
                 assert False, "currently do not support prefix-enabled atten"
                 # prefix-enabled attention
@@ -323,7 +323,7 @@ class XFormersImpl(AttentionImpl[XFormersMetadata]):
                 output[:num_prefill_tokens] = out
 
         if decode_meta := attn_metadata.decode_metadata:
-            print(f"Debug Enter backend decode")
+            #print(f"Debug Enter backend decode")
             output[num_prefill_tokens:] = PagedAttention.forward_decode(
                 decode_query,
                 key_cache,
@@ -337,7 +337,7 @@ class XFormersImpl(AttentionImpl[XFormersMetadata]):
                 self.alibi_slopes,
                 kv_scale,
             )
-            print(f"Debug decode out = {output[num_prefill_tokens:]}")
+            #print(f"Debug decode out = {output[num_prefill_tokens:]}")
 
         # Reshape the output tensor.
         return output.view(-1, self.num_heads * self.head_size)
