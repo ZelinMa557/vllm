@@ -196,7 +196,7 @@ class BuddyAllocator(BlockAllocator):
             free_list = self._free_lists[non_empty_order]
             free_list.append(split_block_id)
             free_list.append(split_block_id + (size // 2))
-            print(f"split {split_block_id} order {non_empty_order+1} append {split_block_id},{split_block_id + (size // 2)}")
+            #print(f"split {split_block_id} order {non_empty_order+1} append {split_block_id},{split_block_id + (size // 2)}")
 
         block_id = self._free_lists[order].pop()
         self._refcounter.incr(block_id)
