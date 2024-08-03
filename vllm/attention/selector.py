@@ -89,6 +89,7 @@ def which_attn_to_use(
 ) -> _Backend:
     """Returns which flash attention backend to use."""
     # Default case.
+    return _Backend.XFORMERS
     selected_backend = _Backend.FLASH_ATTN
 
     # Check the environment variable and override if specified
