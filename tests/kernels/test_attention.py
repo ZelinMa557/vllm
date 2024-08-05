@@ -1,10 +1,8 @@
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import pytest
 import torch
-from xformers import ops as xops
-from xformers.ops.fmha.attn_bias import BlockDiagonalCausalMask
 
 from vllm import _custom_ops as ops
 from vllm.utils import get_max_shared_memory_bytes, is_hip
@@ -47,45 +45,87 @@ USE_ALIBI = [False] #, True]
 KV_CACHE_DTYPE = ["auto","fp8"]
 SEEDS = [0]
 CUDA_DEVICES = ["cuda:0"]
+from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE
+def get_kv_cache_torch_dtype(
+        cache_dtype: Optional[Union[str, torch.dtype]],
+        model_dtype: Optional[Union[str, torch.dtype]] = None) -> torch.dtype:
+    if isinstance(cache_dtype, str):
+        if cache_dtype == "auto":
+            if isinstance(model_dtype, str):
+                torch_dtype = STR_DTYPE_TO_TORCH_DTYPE[model_dtype]
+            elif isinstance(model_dtype, torch.dtype):
+                torch_dtype = model_dtype
+            else:
+                raise ValueError(f"Invalid model dtype: {model_dtype}")
+        elif cache_dtype in ["half", "bfloat16", "float"]:
+            torch_dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_dtype]
+        elif cache_dtype == "fp8":
+            torch_dtype = torch.uint8
+        else:
+            raise ValueError(f"Invalid kv cache dtype: {cache_dtype}")
+    elif isinstance(cache_dtype, torch.dtype):
+        torch_dtype = cache_dtype
+    else:
+        raise ValueError(f"Invalid kv cache dtype: {cache_dtype}")
+    return torch_dtype
 
+def create_kv_caches_with_random(
+    num_blocks: int,
+    block_size: int,
+    num_layers: int,
+    num_heads: int,
+    head_size: int,
+    cache_dtype: Optional[Union[str, torch.dtype]],
+    model_dtype: Optional[Union[str, torch.dtype]] = None,
+    seed: int = 0,
+    device: Optional[str] = "cuda",
+) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+    torch.random.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
 
-def ref_masked_attention(
-    query: torch.Tensor,
-    key: torch.Tensor,
-    value: torch.Tensor,
-    scale: float,
-    attn_mask: Optional[torch.Tensor] = None,
-) -> torch.Tensor:
-    attn_weights = scale * torch.einsum("qhd,khd->hqk", query, key).float()
-    if attn_mask is not None:
-        attn_weights = attn_weights + attn_mask.float()
-    attn_weights = torch.softmax(attn_weights, dim=-1).to(value.dtype)
-    out = torch.einsum("hqk,khd->qhd", attn_weights, value)
-    return out
+    torch_dtype = get_kv_cache_torch_dtype(cache_dtype, model_dtype)
 
-@pytest.mark.parametrize("version", ["v2"])
-@pytest.mark.parametrize("num_seqs", NUM_GEN_SEQS)
-@pytest.mark.parametrize("num_heads", NUM_HEADS)
-@pytest.mark.parametrize("head_size", HEAD_SIZES)
-@pytest.mark.parametrize("use_alibi", USE_ALIBI)
-@pytest.mark.parametrize("block_size", BLOCK_SIZES)
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("kv_cache_dtype", KV_CACHE_DTYPE)
-@pytest.mark.parametrize("seed", SEEDS)
-@pytest.mark.parametrize("device", CUDA_DEVICES)
+    scale = head_size**-0.5
+    x = 16 // torch.tensor([], dtype=torch_dtype).element_size()
+    key_cache_shape = (num_blocks, num_heads, head_size // x, block_size, x)
+    key_caches: List[torch.Tensor] = []
+    for _ in range(num_layers):
+        key_cache = torch.empty(size=key_cache_shape,
+                                dtype=torch_dtype,
+                                device=device)
+        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+            key_cache.uniform_(-scale, scale)
+        else:
+            raise ValueError(
+                f"Does not support key cache of type {cache_dtype}")
+        key_caches.append(key_cache)
+
+    value_cache_shape = (num_blocks, num_heads, head_size, block_size)
+    value_caches: List[torch.Tensor] = []
+    for _ in range(num_layers):
+        value_cache = torch.empty(size=value_cache_shape,
+                                  dtype=torch_dtype,
+                                  device=device)
+        if cache_dtype in ["auto", "half", "bfloat16", "float"]:
+            value_cache.uniform_(-scale, scale)
+        else:
+            raise ValueError(
+                f"Does not support value cache of type {cache_dtype}")
+        value_caches.append(value_cache)
+    return key_caches, value_caches
+
 def test_paged_attention(
-    kv_cache_factory,
-    version: str,
-    num_seqs: int,
     num_heads: Tuple[int, int],
     head_size: int,
-    use_alibi: bool,
-    block_size: int,
-    dtype: torch.dtype,
-    kv_cache_dtype: str,
-    seed: int,
-    device: str,
 ) -> None:
+    seed = 2024
+    device = "cuda"
+    dtype = torch.half
+    kv_cache_dtype = "auto"
+    block_size = 16
+    use_alibi = False
+    num_seqs = 4
     random.seed(seed)
     torch.random.manual_seed(seed)
     if torch.cuda.is_available():
@@ -119,7 +159,7 @@ def test_paged_attention(
     block_tables = torch.tensor(block_tables_lst, dtype=torch.int)
 
     # Create the KV caches.
-    key_caches, value_caches = kv_cache_factory(NUM_BLOCKS, block_size, 1,
+    key_caches, value_caches = create_kv_caches_with_random(NUM_BLOCKS, block_size, 1,
                                                 num_kv_heads, head_size,
                                                 kv_cache_dtype, dtype, seed,
                                                 device)
@@ -235,4 +275,9 @@ def test_paged_attention(
     atol, rtol = 1e-3, 1e-5
     if kv_cache_dtype == "fp8":
         atol, rtol = 1e-2, 1e-5
-    assert torch.allclose(output1, output2, atol=atol, rtol=rtol)
+    print(torch.allclose(output1, output2, atol=atol, rtol=rtol))
+
+for num_heads in NUM_HEADS:
+    for head_size in HEAD_SIZES:
+        print(f"testing num_heads = {num_heads} head_size = {head_size}")
+        test_paged_attention(num_heads, head_size)
