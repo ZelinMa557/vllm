@@ -44,7 +44,7 @@ HEAD_SIZES = [64, 80, 96, 112, 128]
 
 BLOCK_SIZES = [16] #, 32]
 USE_ALIBI = [False] #, True]
-KV_CACHE_DTYPE = ["auto" "fp8"]
+KV_CACHE_DTYPE = ["auto","fp8"]
 SEEDS = [0]
 CUDA_DEVICES = ["cuda:0"]
 
