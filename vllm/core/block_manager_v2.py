@@ -242,6 +242,8 @@ class BlockSpaceManagerV2(BlockSpaceManager):
         assert seq.seq_id in self.block_tables
         block_table = self.block_tables[seq.seq_id]
         res = block_table.get_entries()
+        sizes = [(i>>24)+1 for i in res]
+        print(f"Debug entry sizes = {sizes}")
         return res
 
     def get_cross_block_table(self, seq_group: SequenceGroup) -> List[int]:
