@@ -136,13 +136,9 @@ __device__ void dy_paged_attention_kernel(
   const int start_block_idx =
       USE_PARTITIONING ? partition_idx * num_blocks_per_partition : 0;
   const int end_block_idx =
-      MIN(start_block_idx + num_blocks_per_partition, num_seq_blocks) - 1;
+      MIN(start_block_idx + num_blocks_per_partition, num_seq_blocks);
   const int num_blocks = end_block_idx - start_block_idx;
 
-  const int start_iter_block_idx = start_block_idx + warp_idx;
-  const int end_iter_block_idx =
-      start_iter_block_idx +
-      ((end_block_idx - start_iter_block_idx) / NUM_WARPS) * NUM_WARPS;
   // [start_token_idx, end_token_idx) is the range of tokens to process.
   const int start_token_idx = start_block_idx * BLOCK_SIZE;
   const int end_token_idx =
@@ -216,7 +212,7 @@ __device__ void dy_paged_attention_kernel(
   uint32_t entry_start_phy_id = table_entry & phy_idx_mask;
   uint32_t entry_start_block_id = 0;
   uint32_t entry_end_block_id = entry_block_count - 1;
-  for (uint32_t block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
+  for (uint32_t block_idx = start_block_idx + warp_idx; block_idx < end_block_idx;
        block_idx += NUM_WARPS) {
     while (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
@@ -355,7 +351,7 @@ __device__ void dy_paged_attention_kernel(
   entry_start_phy_id = table_entry & phy_idx_mask;
   entry_start_block_id = 0;
   entry_end_block_id = entry_block_count - 1;
-  for (uint32_t block_idx = start_iter_block_idx; block_idx <= end_iter_block_idx;
+  for (uint32_t block_idx = start_block_idx+warp_idx; block_idx < end_block_idx;
        block_idx += NUM_WARPS) {
     while (block_idx > entry_end_block_id) {
       entry_start_block_id += entry_block_count;
