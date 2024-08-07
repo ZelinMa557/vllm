@@ -284,7 +284,6 @@ def detokenize_incrementally(
     # the decode which decide to add a space or not depending on the
     # surrounding ids.
     if tokenizer.is_fast or not tokenizer.get_added_vocab():
-        print(f"Debug output_tokens = {output_tokens}, prefix_offset = {prefix_offset}, read_offset = {read_offset}")
         prefix_text = tokenizer.convert_tokens_to_string(
             output_tokens[prefix_offset:read_offset])
         new_text = tokenizer.convert_tokens_to_string(
